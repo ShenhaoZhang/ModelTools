@@ -33,9 +33,9 @@ class MetricEval:
         
         if index is not None:
             if not isinstance(index,pd.DatetimeIndex):
-                raise Exception('WRONG')
+                raise TypeError('WRONG')
             if index_freq is None:
-                raise Exception('WRONG')
+                raise TypeError('WRONG')
         self.index       = np.arange(self.sample_n) if index is None else index
         self.index_freq  = index_freq
         
@@ -96,12 +96,12 @@ class MetricEval:
             f'Sample_N={self.sample_n}\n' + 
             tabulate(
                 metric
-                .apply(
-                    func=lambda sr:metric.columns.str.cat(sr.apply(lambda x:'%.3f'%x),sep='='),
-                    axis=1,
-                    result_type='expand'
-                ),
-                tablefmt='plain'
+                .applymap(lambda x:'%.3f'%x)
+                .apply(lambda sr:sr.str.strip('-').str.ljust(sr.str.len().max(),'0'))
+                .apply(lambda sr:metric.columns.str.cat(sr,sep=':'), axis=1, result_type='expand')
+                .reset_index(),
+                tablefmt='plain',
+                showindex=False
             )
         )
         
@@ -110,14 +110,15 @@ class MetricEval:
             f'Sample_N={self.sample_n}\n' + 
             tabulate(
                 metric_resid
-                .apply(
-                    func=lambda sr:metric_resid.columns
-                        .str.extract(r'(?<=resid_)(.+)',expand=False).dropna()
-                        .str.cat(sr.apply(lambda x:'%.3f'%x).values,sep='='),
-                    axis=1,
-                    result_type='expand'
-                ),
-                tablefmt='plain'
+                .applymap(lambda x:'%.3f'%x)
+                .apply(lambda sr:sr.str.strip('-').str.ljust(sr.str.len().max(),'0'))
+                .apply(lambda sr:metric_resid.columns.str
+                       .extract(r'(?<=resid_)(.+)',expand=False).dropna().str.cat(sr.values,sep=':'),
+                       axis=1,
+                       result_type='expand')
+                .reset_index(),
+                tablefmt='plain',
+                showindex=False
             )
         )
         
