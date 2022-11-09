@@ -63,6 +63,7 @@ class MetricEval:
         self.r2   = [metrics.r2_score(self.y_true,self.y_pred[i]) for i in range(self.y_pred_n)]
         self.mae  = [metrics.mean_absolute_error(self.y_true,self.y_pred[i]) for i in range(self.y_pred_n)]
         self.mape = [metrics.mean_absolute_percentage_error(self.y_true,self.y_pred[i]) for i in range(self.y_pred_n)]
+        #TODO 增加ExplainedVariance MBE MSE MAPE MdAE std_MAE std_MAPE
         
         self.data = (
             pd.DataFrame(
