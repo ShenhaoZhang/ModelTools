@@ -16,12 +16,13 @@ warnings.filterwarnings("ignore")
 
 class Metric:
     """
-    预测值的效果监控
+    预测效果的评估指标
     """
     
     def __init__(self, y_true:np.ndarray, y_pred:list, y_pred_name:list = None, y_name = 'y', index:pd.DatetimeIndex = None, index_freq:str = None) -> None:
         self.y_true     = y_true
         self.y_pred     = y_pred if isinstance(y_pred,list) else [y_pred]
+        # TODO 检查y的维度 长度
         
         self.sample_n    = len(self.y_true)
         self.y_pred_n    = len(self.y_pred)
@@ -142,6 +143,10 @@ class Metric:
         },index=self.y_pred_name)
         
         return metric
+    
+    #TODO 用PCA的方法来比较不同的预测值
+    
+    #TODO 调整plot方法的命名
     
     def plot_metric_TVP(self,add_lm=False,add_outlier=False,add_quantile=False,figure_size=(6.4, 4.8)):
         gg.options.figure_size = figure_size
