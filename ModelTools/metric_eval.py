@@ -12,6 +12,8 @@ from tabulate import tabulate
 
 warnings.filterwarnings("ignore")
 
+#TODO 增加图形的交互功能
+
 class MetricEval:
     """
     预测值的效果监控
@@ -43,6 +45,8 @@ class MetricEval:
         self._init_data()
         self._init_plot_caption()
         
+        print(self.get_metric())
+        
     def _init_data(self):
         
         # 残差
@@ -63,7 +67,7 @@ class MetricEval:
         self.r2   = [metrics.r2_score(self.y_true,self.y_pred[i]) for i in range(self.y_pred_n)]
         self.mae  = [metrics.mean_absolute_error(self.y_true,self.y_pred[i]) for i in range(self.y_pred_n)]
         self.mape = [metrics.mean_absolute_percentage_error(self.y_true,self.y_pred[i]) for i in range(self.y_pred_n)]
-        #TODO 增加ExplainedVariance MBE MSE MAPE MdAE std_MAE std_MAPE
+        #TODO MBE MSE MAPE MdAE std_MAE(iqr) std_MAPE(iqr)
         
         self.data = (
             pd.DataFrame(
