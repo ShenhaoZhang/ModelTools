@@ -39,14 +39,14 @@ class Metric:
                 raise TypeError('WRONG')
             if index_freq is None:
                 raise TypeError('WRONG')
+            if len(index) != len(y_true):
+                raise ValueError('WRONG')
         self.index       = np.arange(self.sample_n) if index is None else index
         self.index_freq  = index_freq
         
         self.data = None
         self._init_data()
         self._init_plot_caption()
-        
-        print(self.get_metric())
         
     def _init_data(self):
         
@@ -103,7 +103,7 @@ class Metric:
             tabulate(
                 metric
                 .applymap(lambda x:'%.3f'%x)
-                .apply(lambda sr:sr.str.strip('-').str.ljust(sr.str.len().max(),'0'))
+                .apply(lambda sr:sr.str.ljust(sr.str.strip('-').str.len().max(),'0'))
                 .apply(lambda sr:metric.columns.str.cat(sr,sep=':'), axis=1, result_type='expand')
                 .reset_index(),
                 tablefmt='plain',
@@ -117,7 +117,7 @@ class Metric:
             tabulate(
                 metric_resid
                 .applymap(lambda x:'%.3f'%x)
-                .apply(lambda sr:sr.str.strip('-').str.ljust(sr.str.len().max(),'0'))
+                .apply(lambda sr:sr.str.ljust(sr.str.strip('-').str.len().max(),'0'))
                 .apply(lambda sr:metric_resid.columns.str
                        .extract(r'(?<=resid_)(.+)',expand=False).dropna().str.cat(sr.values,sep=':'),
                        axis=1,
@@ -130,17 +130,21 @@ class Metric:
         
     def get_metric(self):
         #TODO 增加ACF特征
-        metric = pd.DataFrame({
-            'R2'               : self.r2,
-            'MAE'              : self.mae,
-            'MAPE'             : self.mape,
-            'resid_Mean'       : self.resid_mean,
-            'resid_SD'         : self.resid_sd,
-            'resid_Skew'       : self.resid_skew,
-            'resid_Kurt'       : self.resid_kurt,
-            'resid_IQR'        : self.residual_iqr,
-            'resid_Outlier_pct': self.outlier_pct
-        },index=self.y_pred_name)
+        metric = (
+            pd.DataFrame({
+                'R2'               : self.r2,
+                'MAE'              : self.mae,
+                'MAPE'             : self.mape,
+                'resid_Mean'       : self.resid_mean,
+                'resid_SD'         : self.resid_sd,
+                'resid_Skew'       : self.resid_skew,
+                'resid_Kurt'       : self.resid_kurt,
+                'resid_IQR'        : self.residual_iqr,
+                'resid_Outlier_pct': self.outlier_pct
+                },
+                index=self.y_pred_name)
+            .sort_index()
+        )
         
         return metric
     
@@ -196,13 +200,21 @@ class Metric:
                 
         return plot
     
-    def plot_metric_TSP(self,time_limit=None,figure_size=(10, 5)):
+    def plot_metric_TSP(self,time_limit=None,drop_anomaly=False,figure_size=(10, 5)):
         gg.options.figure_size = figure_size
+        
+        #TODO 当预测值或实际值存在较大的异常值时，图形会缩放，导致难以观察，调整
+        if drop_anomaly is True:
+            # plot_data = plot_data.loc[lambda dt:dt.]
+            pass
+        else:
+            plot_data = self.data
+            
         plot = (
-            gg.ggplot(pd.DataFrame(self.data))
+            gg.ggplot(plot_data)
             + gg.aes(x = 'Time')
             + gg.geom_line(gg.aes(y=f'True_{self.y_name}',color="'True'"))
-            + gg.geom_line(gg.aes(y='Pred',color="'Pred'"),data=self.data)
+            + gg.geom_line(gg.aes(y='Pred',color="'Pred'"))
             + gg.facet_wrap(facets='method',ncol=1)
             + gg.scale_color_manual(values=['black','green'])
             + gg.labs(
