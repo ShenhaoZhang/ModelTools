@@ -20,10 +20,11 @@ class Metric:
     """
     
     def __init__(self, y_true:np.ndarray, y_pred:list, y_pred_name:list = None, y_name = 'y', index:pd.DatetimeIndex = None, index_freq:str = None) -> None:
-        self.y_true     = y_true
-        self.y_pred     = y_pred if isinstance(y_pred,list) else [y_pred]
-        self.sample_n    = len(self.y_true)
-        self.y_pred_n    = len(self.y_pred)
+        self.y_true   = np.array(y_true)
+        self.y_pred   = y_pred if isinstance(y_pred,list) else [y_pred]
+        self.y_pred   = [np.array(pred) for pred in self.y_pred]
+        self.sample_n = len(self.y_true)
+        self.y_pred_n = len(self.y_pred)
         
         # 真实值与预测值的的长度校验
         for pred in self.y_pred:
@@ -55,21 +56,14 @@ class Metric:
         
     def _init_data(self):
         
-        # 残差
+        # 残差及残差中的异常值
         self.resid           = [self.y_true-pred for pred in self.y_pred]
-        self.resid_mean      = [np.mean(resid) for resid in self.resid]
-        self.resid_sd        = [np.std(resid) for resid in self.resid]
-        self.resid_skew      = [stats.skew(resid) for resid in self.resid]
-        self.resid_kurt      = [stats.kurtosis(resid) for resid in self.resid]
         resid_total          = np.array(self.resid).flatten()
-        self.resid_iqr       = [np.quantile(resid,q=0.75) - np.quantile(resid,q=0.25) for resid in self.resid]
         self.resid_total_iqr = np.quantile(resid_total,q=0.75) - np.quantile(resid_total,q=0.25)
-        
         # 异常值的定义是残差大于1.5倍IQR的预测样本点
         self.outlier_index = [np.abs(self.resid[i]) > (1.5 * self.resid_total_iqr) for i in range(self.y_pred_n)]
         self.outlier_count = [np.sum(self.outlier_index[i]) for i in range(self.y_pred_n)]
         self.outlier_pct   = [np.round(self.outlier_count[i] / self.sample_n,4) for i in range(self.y_pred_n)]
-        
         
         self.data = (
             pd.DataFrame(
@@ -95,47 +89,34 @@ class Metric:
         
     def get_metric(self,type='eval'):
         
-        # 评价指标
-        #TODO MdAE std_MAE(iqr) std_MAPE(iqr)
-        self.r2, self.mae, self.mape, self.maxe, self.mbe, self.mse = [],[],[],[],[],[]
-        for i in range(self.y_pred_n):
-            self.r2.append(metrics.r2_score(self.y_true,self.y_pred[i]))
-            self.mae.append(metrics.mean_absolute_error(self.y_true,self.y_pred[i]))
-            self.mape.append(metrics.mean_absolute_percentage_error(self.y_true,self.y_pred[i]))
-            self.maxe.append(metrics.max_error(self.y_true,self.y_pred[i]))
-            self.mbe.append(np.mean(self.y_pred[i] - self.y_true))
-            self.mse.append(metrics.mean_squared_error(self.y_true,self.y_pred[i]))
-        
         if type == 'eval':
-            metric = (
-                pd.DataFrame({
-                    'R2'  : self.r2,
-                    'MAE' : self.mae,
-                    'MAPE': self.mape,
-                    'MBE' : self.mbe,
-                    'MSE' : self.mse,
-                    'MAXE': self.maxe,
-                    },
-                    index=self.y_pred_name)
-                .sort_index()
-            )
+            metric_dict = {}
+            metric_dict['R2']   = lambda y_pred : metrics.r2_score(self.y_true,y_pred)
+            metric_dict['MAE']  = lambda y_pred : metrics.mean_absolute_error(self.y_true,y_pred)
+            metric_dict['MBE']  = lambda y_pred : np.mean(y_pred - self.y_true)
+            metric_dict['MAPE'] = lambda y_pred : metrics.mean_absolute_percentage_error(self.y_true,y_pred)
+            metric_dict['MSE']  = lambda y_pred : metrics.mean_squared_error(self.y_true,y_pred)
+            metric_dict['MAXE'] = lambda y_pred : metrics.max_error(self.y_true,y_pred)
+            #TODO MdAE std_MAE(iqr) std_MAPE(iqr)
+            metric_dict = {name:list(map(func,self.y_pred)) for name,func in metric_dict.items()}
+            
         elif type == 'resid':
             #TODO 增加ACF特征
-            metric = (
-                pd.DataFrame({
-                    'resid_Mean'       : self.resid_mean,
-                    'resid_SD'         : self.resid_sd,
-                    'resid_Skew'       : self.resid_skew,
-                    'resid_Kurt'       : self.resid_kurt,
-                    'resid_IQR'        : self.resid_iqr,
-                    'resid_Outlier_pct': self.outlier_pct
-                    },
-                    index=self.y_pred_name)
-                .sort_index()
-            )
+            #TODO 仿照上面的代码修改下面
+            metric_dict = {}
+            metric_dict['Mean']   = np.mean
+            metric_dict['Median'] = np.median
+            metric_dict['SD']     = np.std
+            metric_dict['IQR']    = lambda resid : np.quantile(resid,q=0.75) - np.quantile(resid,q=0.25)
+            metric_dict['Skew']   = stats.skew
+            metric_dict['Kurt']   = stats.kurtosis
+            
+            metric_dict = {'resid_'+name:list(map(func,self.resid)) for name,func in metric_dict.items()}
+            metric_dict['resid_Outlier_pct'] = self.outlier_pct
         else:
             raise TypeError('WRONG')
         
+        metric = pd.DataFrame(metric_dict,index=self.y_pred_name).sort_index()
         return metric
     
     def _get_plot_caption(self,type):
@@ -180,13 +161,13 @@ class Metric:
     def plot_metric_trend(self):
         ...
     
-    def plot_TvP(self,add_lm=False,add_outlier=False,add_quantile=False,figure_size=(10, 5)):
+    def plot_TvP(self,add_lm=False,add_outlier=False,add_quantile=False,figure_size=(10, 5),scales='fixed'):
         gg.options.figure_size = figure_size
         plot = (
             gg.ggplot(self.data)
             + gg.aes(x=f'True_{self.y_name}',y='Pred')
             + gg.geom_point()
-            + gg.facet_wrap(facets='method')
+            + gg.facet_wrap(facets='method',scales=scales)
             + gg.labs(
                 title=f'True_{self.y_name} VS Predict_{self.y_name}',
                 caption=self._get_plot_caption(type='eval'),
@@ -228,7 +209,7 @@ class Metric:
                 
         return plot
     
-    def plot_Pts(self,time_limit=None,drop_anomaly=False,figure_size=(10, 5)):
+    def plot_Pts(self,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed'):
         gg.options.figure_size = figure_size
         
         #TODO 当预测值或实际值存在较大的异常值时，图形会缩放，导致难以观察，调整
@@ -243,7 +224,7 @@ class Metric:
             + gg.aes(x = 'Time')
             + gg.geom_line(gg.aes(y=f'True_{self.y_name}',color="'True'"))
             + gg.geom_line(gg.aes(y='Pred',color="'Pred'"))
-            + gg.facet_wrap(facets='method',ncol=1)
+            + gg.facet_wrap(facets='method',ncol=1,scales=scales)
             + gg.scale_color_manual(values=['black','green'])
             + gg.labs(
                 color = ' ',
@@ -259,13 +240,13 @@ class Metric:
         
         return plot
         
-    def plot_Rts(self,add_iqr_line=False,time_limit=None,figure_size=(10, 5)):
+    def plot_Rts(self,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed'):
         gg.options.figure_size = figure_size
         plot = (
             gg.ggplot(self.data)
             + gg.geom_line(gg.aes(x='Time',y='Resid'))
             + gg.geom_hline(yintercept=0,size=1,color='red')
-            + gg.facet_wrap(facets='method',ncol=1)
+            + gg.facet_wrap(facets='method',ncol=1,scales=scales)
             + gg.labs(
                 title = 'Time Series for Residual',
                 caption=self._get_plot_caption(type='resid'),
