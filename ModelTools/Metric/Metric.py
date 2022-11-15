@@ -5,12 +5,12 @@ import pandas as pd
 import plotnine as gg
 from scipy import stats
 from sklearn import metrics
-from sklearn.linear_model import QuantileRegressor
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
-from sklearn.pipeline import Pipeline
 from tabulate import tabulate
 
-warnings.filterwarnings("ignore")
+from .utils import plot_gg
+from .utils import plot_alt
+
+# warnings.filterwarnings("ignore")
 
 #TODO 增加图形的交互功能
 
@@ -153,6 +153,7 @@ class Metric:
             )
         return caption
     
+    #TODO 考虑使用装饰器来处理多函数有相同输入的问题
     #TODO 用PCA的方法来比较不同的预测值,或者自定义两个指标
     def plot_metric_scatter(self):
         ...
@@ -161,112 +162,61 @@ class Metric:
     def plot_metric_trend(self):
         ...
     
-    def plot_TvP(self,add_lm=False,add_outlier=False,add_quantile=False,figure_size=(10, 5),scales='fixed'):
-        gg.options.figure_size = figure_size
-        plot = (
-            gg.ggplot(self.data)
-            + gg.aes(x=f'True_{self.y_name}',y='Pred')
-            + gg.geom_point()
-            + gg.facet_wrap(facets='method',scales=scales)
-            + gg.labs(
-                title=f'True_{self.y_name} VS Predict_{self.y_name}',
-                caption=self._get_plot_caption(type='eval'),
-                x = f'True_{self.y_name}',
-                y = f'Pred_{self.y_name}'
+    def plot_TvP(self,add_lm=False, add_outlier=False, add_quantile=False, figure_size=(10, 5), scales='fixed', engine='gg'):
+        caption = self._get_plot_caption(type='eval')
+        if engine == 'gg':
+            plot = plot_gg.gg_Tvp(
+                data         = self.data,
+                y_name       = self.y_name,
+                y_pred_name  = self.y_pred_name,
+                caption      = caption,
+                add_lm       = add_lm,
+                add_outlier  = add_outlier,
+                add_quantile = add_quantile,
+                figure_size  = figure_size,
+                scales       = scales
             )
-        )
-        
-        if add_lm:
-            plot += gg.geom_smooth(method='lm',color='blue')
-            
-        if add_outlier:
-            plot = plot + gg.geom_point(gg.aes(color='Outlier')) + gg.scale_color_manual(values=['black','red'])
-            
-        if add_quantile:
-            for q in [0.05,0.95]:
-                mod = Pipeline([
-                    ('std',StandardScaler()),
-                    ('spline',PolynomialFeatures()),
-                    ('qr',QuantileRegressor(quantile=q,alpha=0,solver='highs')),
-                ])
-                x_sample, y_hat, method_sample = np.array([]), np.array([]) ,np.array([])
-                for name in self.y_pred_name:
-                    data_name = self.data.loc[lambda dt:dt.method==name,:]
-                    x = data_name.loc[:,f'True_{self.y_name}'].to_numpy()
-                    y = data_name.loc[:,'Pred'].to_numpy()
-                    mod.fit(x.reshape(-1,1),y)
-                    y_hat = np.append(y_hat,mod.predict(X=x.reshape(-1,1)))
-                    x_sample = np.append(x_sample,x)
-                    method_sample = np.append(method_sample,[name]*len(x))
-                    
-                plot += gg.geom_line(
-                    data=pd.DataFrame({'x':x_sample,'y':y_hat,'method':method_sample}),
-                    mapping = gg.aes(x='x',y='y'),
-                    color='red',
-                    linetype='--'
-                )
-        plot += gg.geom_abline(slope=1,intercept=0,color='red',size=1)
-                
+        elif engine == 'alt':
+            # TODO 增加alt图像
+            plot = plot_alt.plot_TvP(
+                data=self.data,
+                y_name=self.y_name,
+                scales=scales
+            )
         return plot
     
-    def plot_Pts(self,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed'):
-        gg.options.figure_size = figure_size
-        
-        #TODO 当预测值或实际值存在较大的异常值时，图形会缩放，导致难以观察，调整
-        if drop_anomaly is True:
-            # plot_data = plot_data.loc[lambda dt:dt.]
-            pass
-        else:
-            plot_data = self.data
-            
-        plot = (
-            gg.ggplot(plot_data)
-            + gg.aes(x = 'Time')
-            + gg.geom_line(gg.aes(y=f'True_{self.y_name}',color="'True'"))
-            + gg.geom_line(gg.aes(y='Pred',color="'Pred'"))
-            + gg.facet_wrap(facets='method',ncol=1,scales=scales)
-            + gg.scale_color_manual(values=['black','green'])
-            + gg.labs(
-                color = ' ',
-                title = f'Time Series for True_{self.y_name} and Predict_{self.y_name}',
-                caption = self._get_plot_caption(type='eval'),
-                y = self.y_name
+    def plot_Pts(self,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed',engine='gg'):
+        caption = self._get_plot_caption(type='eval')
+        if engine == 'gg':
+            plot = plot_gg.gg_Pts(
+                data         = self.data,
+                y_name       = self.y_name,
+                caption      = caption,
+                time_limit   = time_limit,
+                drop_anomaly = drop_anomaly,
+                figure_size  = figure_size,
+                scales       = scales
             )
-        )
-        
-        if time_limit:
-            plot += gg.scale_x_continuous(limits=time_limit)
-            #TODO 增加时间index的处理
-        
+        elif engine == 'alt':
+            # TODO 增加alt图像
+            pass
         return plot
         
-    def plot_Rts(self,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed'):
-        gg.options.figure_size = figure_size
-        plot = (
-            gg.ggplot(self.data)
-            + gg.geom_line(gg.aes(x='Time',y='Resid'))
-            + gg.geom_hline(yintercept=0,size=1,color='red')
-            + gg.facet_wrap(facets='method',ncol=1,scales=scales)
-            + gg.labs(
-                title = 'Time Series for Residual',
-                caption=self._get_plot_caption(type='resid'),
+    def plot_Rts(self,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed',engine='gg'):
+        caption = self._get_plot_caption(type='resid')
+        if engine == 'gg':
+            plot = plot_gg.gg_Rts(
+                data         = self.data,
+                caption      = caption,
+                add_iqr_line = add_iqr_line,
+                iqr          = self.resid_total_iqr,
+                time_limit   = time_limit,
+                figure_size  = figure_size,
+                scales       = scales
             )
-        )
-        
-        # TODO增加指示不同预测结果相差较大的区域
-        
-        if add_iqr_line:
-            plot = (
-                plot 
-                + gg.geom_hline(gg.aes(linetype='"+- 1.5 * IQR"',yintercept=self.resid_total_iqr * 1.5),color='green',size=0.5)
-                + gg.geom_hline(gg.aes(linetype='"+- 1.5 * IQR"',yintercept=-self.resid_total_iqr * 1.5),color='green',size=0.5)
-                + gg.scale_linetype_manual(name=' ',values=['--','--'])
-            )
-        
-        if time_limit:
-            plot += gg.scale_x_continuous(limits=time_limit)
-            #TODO 增加时间index的处理
-        
+        elif engine == 'alt':
+            # TODO 增加alt图像
+            pass
         return plot
     
     def plot_Rar(self):
