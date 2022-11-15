@@ -71,10 +71,10 @@ class Metric:
                 index=['Time',f'True_{self.y_name}', *self.y_pred_name, *self.resid_name, *self.outlier_name]
             )
             .T
-            .pipe(pd.wide_to_long,stubnames=['Pred','Resid','Outlier'],i='Time',j='method',suffix='\w+',sep='_')
+            .pipe(pd.wide_to_long,stubnames=['Pred','Resid','Outlier'],i='Time',j='Method',suffix='\w+',sep='_')
             .reset_index()
             .infer_objects()
-            .assign(method=lambda dt:'Pred_'+dt.method)
+            .assign(Method=lambda dt:'Pred_'+dt.Method)
         )
         
         # 时间索引填充空缺值
@@ -82,10 +82,10 @@ class Metric:
             time_start = self.data.Time.min()
             time_end = self.data.Time.max()
             complete_index = pd.MultiIndex.from_product(
-                [pd.date_range(time_start,time_end,freq=self.index_freq), self.data.method.drop_duplicates()],
-                names=['Time','method']
+                [pd.date_range(time_start,time_end,freq=self.index_freq), self.data.Method.drop_duplicates()],
+                names=['Time','Method']
             )
-            self.data = self.data.set_index(['Time','method']).reindex(complete_index).reset_index()
+            self.data = self.data.set_index(['Time','Method']).reindex(complete_index).reset_index()
         
     def get_metric(self,type='eval'):
         

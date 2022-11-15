@@ -11,7 +11,7 @@ def gg_Tvp(data,y_name,y_pred_name,caption,add_lm=False,add_outlier=False,add_qu
         gg.ggplot(data)
         + gg.aes(x=f'True_{y_name}',y='Pred')
         + gg.geom_point()
-        + gg.facet_wrap(facets='method',scales=scales)
+        + gg.facet_wrap(facets='Method',scales=scales)
         + gg.labs(
             title=f'True_{y_name} VS Predict_{y_name}',
             caption=caption,
@@ -22,7 +22,7 @@ def gg_Tvp(data,y_name,y_pred_name,caption,add_lm=False,add_outlier=False,add_qu
     plot = plot + gg.theme(subplots_adjust={'wspace': 0.25,'hspace': 0.25}) if scales!='fixed' else plot
     
     if add_lm:
-        plot += gg.geom_smooth(method='lm',color='blue')
+        plot += gg.geom_smooth(Method='lm',color='blue')
         
     if add_outlier:
         plot = plot + gg.geom_point(gg.aes(color='Outlier')) + gg.scale_color_manual(values=['black','red'])
@@ -36,7 +36,7 @@ def gg_Tvp(data,y_name,y_pred_name,caption,add_lm=False,add_outlier=False,add_qu
             ])
             x_sample, y_hat, method_sample = np.array([]), np.array([]) ,np.array([])
             for name in y_pred_name:
-                data_name = data.loc[lambda dt:dt.method==name,:]
+                data_name = data.loc[lambda dt:dt.Method==name,:]
                 x = data_name.loc[:,f'True_{y_name}'].to_numpy()
                 y = data_name.loc[:,'Pred'].to_numpy()
                 mod.fit(x.reshape(-1,1),y)
@@ -45,7 +45,7 @@ def gg_Tvp(data,y_name,y_pred_name,caption,add_lm=False,add_outlier=False,add_qu
                 method_sample = np.append(method_sample,[name]*len(x))
                 
             plot += gg.geom_line(
-                data=pd.DataFrame({'x':x_sample,'y':y_hat,'method':method_sample}),
+                data=pd.DataFrame({'x':x_sample,'y':y_hat,'Method':method_sample}),
                 mapping = gg.aes(x='x',y='y'),
                 color='red',
                 linetype='--'
@@ -69,7 +69,7 @@ def gg_Pts(data,y_name,caption,time_limit=None,drop_anomaly=False,figure_size=(1
         + gg.aes(x = 'Time')
         + gg.geom_line(gg.aes(y=f'True_{y_name}',color="'True'"))
         + gg.geom_line(gg.aes(y='Pred',color="'Pred'"))
-        + gg.facet_wrap(facets='method',ncol=1,scales=scales)
+        + gg.facet_wrap(facets='Method',ncol=1,scales=scales)
         + gg.scale_color_manual(values=['black','green'])
         + gg.labs(
             color = ' ',
@@ -91,7 +91,7 @@ def gg_Rts(data,caption,iqr,add_iqr_line=False,time_limit=None,figure_size=(10, 
         gg.ggplot(data)
         + gg.geom_line(gg.aes(x='Time',y='Resid'))
         + gg.geom_hline(yintercept=0,size=1,color='red')
-        + gg.facet_wrap(facets='method',ncol=1,scales=scales)
+        + gg.facet_wrap(facets='Method',ncol=1,scales=scales)
         + gg.labs(
             title = 'Time Series for Residual',
             caption=caption,
