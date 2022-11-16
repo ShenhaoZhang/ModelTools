@@ -3,10 +3,9 @@
 import numpy as np
 import pandas as pd
 import plotnine as gg
-from sklearn.model_selection import train_test_split,TimeSeriesSplit
+from sklearn.model_selection import train_test_split,TimeSeriesSplit,GridSearchCV
 
-#TODO 添加配置文件
-# from .config import config
+from base_model import get_model
 
 class Model:
     def __init__(self,data:pd.DataFrame,col_x:list,col_y:str) -> None:
