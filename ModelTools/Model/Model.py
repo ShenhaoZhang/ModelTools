@@ -9,6 +9,7 @@ from sklearn import linear_model as lm
 from sklearn import preprocessing as pr
 from sklearn.decomposition import PCA 
 from sklearn.model_selection import train_test_split,TimeSeriesSplit,GridSearchCV
+from tqdm import tqdm
 
 from . import model_tools as tools
 
@@ -29,7 +30,7 @@ class Model:
         self.all_test_predict = None
         
     def fit(self,add_struct=None):
-        base_struct = ['poly_ols','inter_sp_ols']
+        base_struct = ['poly_ols','inter_sp_ols','poly_std_huber','inter_sp_std_huber']
         #TODO struct校验
         model_struct = base_struct if add_struct is None else base_struct + add_struct
         
@@ -38,7 +39,7 @@ class Model:
         self.all_train_info = {}
         self.cv_method = TimeSeriesSplit(n_splits=5)
         
-        for struct in model_struct:
+        for struct in tqdm(model_struct):
             model = get_pipeline(struct=struct,param=tools.param,cv=self.cv_method)
             model.fit(X=self.train_data.loc[:,self.col_x],
                       y=self.train_data.loc[:,self.col_y])
@@ -53,6 +54,9 @@ class Model:
         ...
     
     def choose_model(self):
+        ...
+    
+    def save_model(self):
         ...
     
 def get_pipeline(struct:str,param:dict,cv):
