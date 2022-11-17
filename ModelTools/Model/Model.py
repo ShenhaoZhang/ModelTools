@@ -12,12 +12,15 @@ from sklearn.model_selection import train_test_split,TimeSeriesSplit,GridSearchC
 from tqdm import tqdm
 
 from . import model_tools as tools
+from ..Metric.Metric import Metric
 
 class Model:
-    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str) -> None:
+    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,index:str=None,index_freq=None) -> None:
         self.data = data 
         self.col_x = col_x
         self.col_y = col_y
+        self.index = index
+        self.index_freq = index_freq
         
         self.train_data, self.test_data = train_test_split(data, test_size=0.3, random_state=0, shuffle=False)
         self.train_x = self.train_data.loc[:,self.col_x]
@@ -46,7 +49,16 @@ class Model:
             self.all_model[struct] = model
             self.all_train_info[struct] = model.cv_results_
             self.all_test_predict[struct] = model.predict(self.test_x)
-    
+
+        self.Metric = Metric(
+            y_true=self.test_y.to_numpy(),
+            y_pred=list(self.all_test_predict.values()),
+            y_pred_name=list(self.all_test_predict.keys()),
+            index=self.index,
+            index_freq=self.index_freq
+        )
+        
+        
     def check_split(self):
         ...
     
@@ -58,7 +70,8 @@ class Model:
     
     def save_model(self):
         ...
-    
+
+
 def get_pipeline(struct:str,param:dict,cv):
     # 解析模型结构字符
     struct = struct.split('_')
@@ -88,11 +101,12 @@ def get_pipeline(struct:str,param:dict,cv):
     
     # 网格搜索的交叉验证方法
     search = GridSearchCV(
-        estimator=pipe,
-        param_grid=valid_param,
-        refit=True,
-        cv=cv,
-        return_train_score=True
+        estimator          = pipe,
+        param_grid         = valid_param,
+        refit              = True,
+        cv                 = cv,
+        return_train_score = True,
+        n_jobs             = -1
     )
     return search
 

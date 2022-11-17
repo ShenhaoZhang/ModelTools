@@ -2,7 +2,6 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import plotnine as gg
 from scipy import stats
 from sklearn import metrics
 from tabulate import tabulate
@@ -199,7 +198,10 @@ class Metric:
             )
         elif engine == 'alt':
             # TODO 增加alt图像
-            pass
+            plot = plot_alt.plot_Pts(
+                data=self.data,
+                y_name=self.y_name
+            )
         return plot
         
     def plot_Rts(self,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed',engine='gg'):
