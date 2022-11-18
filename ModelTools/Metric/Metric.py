@@ -42,7 +42,11 @@ class Metric:
         # 当索引不为None时的校验
         if index is not None:
             if not isinstance(index,pd.DatetimeIndex):
-                raise TypeError('WRONG')
+                try:
+                    index = pd.DatetimeIndex(index)
+                except Exception as E:
+                    print(E)
+                    raise TypeError('WRONG')
             if index_freq is None:
                 raise ValueError('WRONG')
             if len(index) != len(y_true):
@@ -153,9 +157,14 @@ class Metric:
         return caption
     
     #TODO 考虑使用装饰器来处理多函数有相同输入的问题
-    #TODO 用PCA的方法来比较不同的预测值,或者自定义两个指标
-    def plot_metric_scatter(self):
-        ...
+    
+    def plot_metric_scatter(self,type='bias_var'):
+        if type == 'bias_var':
+            metric = self.get_metric(type='resid')
+        elif type == 'pca':
+            metric = self.get_metric(type='eval')
+        plot = plot_alt.plot_metric_scatter(data=metric,type=type)
+        return plot
     
     #TODO 分块可视化metric变化的趋势
     def plot_metric_trend(self):

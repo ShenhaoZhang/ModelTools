@@ -15,12 +15,12 @@ from . import model_tools as tools
 from ..Metric.Metric import Metric
 
 class Model:
-    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,index:str=None,index_freq=None) -> None:
+    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,col_ts:str=None,ts_freq=None) -> None:
         self.data = data 
         self.col_x = col_x
         self.col_y = col_y
-        self.index = index
-        self.index_freq = index_freq
+        self.col_ts = col_ts
+        self.ts_freq = ts_freq
         
         self.train_data, self.test_data = train_test_split(data, test_size=0.3, random_state=0, shuffle=False)
         self.train_x = self.train_data.loc[:,self.col_x]
@@ -54,10 +54,9 @@ class Model:
             y_true      = self.test_y.to_numpy(),
             y_pred      = list(self.all_test_predict.values()),
             y_pred_name = list(self.all_test_predict.keys()),
-            index       = self.data[:,self.col],
-            index_freq  = self.index_freq
+            index       = self.test_data.loc[:,self.col_ts],
+            index_freq  = self.ts_freq
         )
-        
         
     def check_split(self):
         ...

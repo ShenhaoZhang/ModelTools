@@ -1,5 +1,8 @@
 import pandas as pd
 import altair as alt 
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
 
 def plot_TvP(data,y_name,scales='fixed',select=None):
     base_Chart = alt.Chart(data)
@@ -60,3 +63,48 @@ def scatter(base_Chart,y_name,scales,select):
     
     return plot
 
+def plot_metric_scatter(data,type):
+    if type == 'bias_var':
+        #TODO 增加两条辅助线
+        #TODO 增加均值方差
+        plot = alt.Chart(data.reset_index()).mark_circle().encode(
+            x = 'resid_Median',
+            y = alt.Y('resid_IQR',scale=alt.Scale(zero=False)),
+            tooltip = 'index'
+        )
+        
+    if type == 'pca':
+        #PCA 分解并提取元素
+        pca = Pipeline([('std',StandardScaler()),('pca',PCA())]).fit(data)
+        var_ratio = pca['pca'].explained_variance_ratio_
+        score = pd.DataFrame(
+            pca.fit_transform(data),
+            columns = [f'PC{i}' for i in range(1,data.shape[1]+1)],
+            index   = data.index
+        )
+        loadings = pd.DataFrame(
+            pca['pca'].components_,
+            columns = score.columns,
+            index   = data.columns
+        )
+        
+        base_chart = alt.Chart(score.reset_index())
+        point = base_chart.mark_circle().encode(
+            x=alt.X('PC1',title=f'PC1 ({round(var_ratio[0]*100,2)}%)'),
+            y=alt.X('PC2',title=f'PC2 ({round(var_ratio[1]*100,2)}%)'),
+            tooltip='index'
+        )
+        vline = base_chart.mark_rule(strokeDash=[12, 6],size=1).encode(x=alt.datum(0))
+        hline = base_chart.mark_rule(strokeDash=[12, 6],size=1).encode(y=alt.datum(0))
+        bar_pc1 = alt.Chart(loadings.loc[:,['PC1','PC2']].reset_index()).mark_bar().encode(
+            y = alt.Y('index',sort='-x'),
+            x = 'PC1'
+        ).properties(height=70)
+        bar_pc2 = alt.Chart(loadings.loc[:,['PC1','PC2']].reset_index()).mark_bar().encode(
+            x = alt.Y('index',sort='-y'),
+            y = 'PC2'
+        ).properties(width=70)
+
+        plot = bar_pc1 & ((point+hline+vline)|bar_pc2)
+        
+    return plot

@@ -2,15 +2,17 @@ from sklearn import linear_model as lm
 from sklearn import preprocessing as pr
 
 preprocess = {
-    'std':pr.StandardScaler(),
-    'poly':pr.PolynomialFeatures(),
-    'inter':pr.PolynomialFeatures(interaction_only=True),
-    'sp':pr.SplineTransformer()
+    'std'  : pr.StandardScaler(),
+    'poly' : pr.PolynomialFeatures(),
+    'inter': pr.PolynomialFeatures(interaction_only=True),
+    'sp'   : pr.SplineTransformer()
 }
 
 model = {
-    'ols':lm.LinearRegression(),
-    'huber':lm.HuberRegressor(max_iter=10000)
+    'OLS'  : lm.LinearRegression(),
+    'HUBER': lm.HuberRegressor(max_iter=10000),
+    'EN'   : lm.ElasticNetCV(),
+    'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0)
 }
 
 param = {
@@ -19,6 +21,8 @@ param = {
 }
 
 base_struct = [
-    'poly_ols', 'inter_sp_ols',
-    'poly_std_huber', 'inter_sp_std_huber'
+    'poly_OLS', 'inter_sp_OLS',
+    'poly_std_HUBER', 'inter_sp_std_HUBER',
+    'poly_std_EN', 'inter_sp_std_EN',
+    'poly_std_QR', 'inter_sp_std_QR'
 ]
