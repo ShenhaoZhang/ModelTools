@@ -17,3 +17,8 @@ param = {
     'poly__degree':[1,2,3],
     'inter__degree':[1,2,3]
 }
+
+base_struct = [
+    'poly_ols', 'inter_sp_ols',
+    'poly_std_huber', 'inter_sp_std_huber'
+]

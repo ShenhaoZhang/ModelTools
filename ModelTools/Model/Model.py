@@ -25,15 +25,15 @@ class Model:
         self.train_data, self.test_data = train_test_split(data, test_size=0.3, random_state=0, shuffle=False)
         self.train_x = self.train_data.loc[:,self.col_x]
         self.train_y = self.train_data.loc[:,self.col_y]
-        self.test_x = self.test_data.loc[:,self.col_x]
-        self.test_y = self.test_data.loc[:,self.col_y]
+        self.test_x  = self.test_data.loc[:,self.col_x]
+        self.test_y  = self.test_data.loc[:,self.col_y]
         
         self.cv_method = None
         self.all_model = None
         self.all_test_predict = None
         
     def fit(self,add_struct=None):
-        base_struct = ['poly_ols','inter_sp_ols','poly_std_huber','inter_sp_std_huber']
+        base_struct = tools.base_struct
         #TODO struct校验
         model_struct = base_struct if add_struct is None else base_struct + add_struct
         
@@ -51,11 +51,11 @@ class Model:
             self.all_test_predict[struct] = model.predict(self.test_x)
 
         self.Metric = Metric(
-            y_true=self.test_y.to_numpy(),
-            y_pred=list(self.all_test_predict.values()),
-            y_pred_name=list(self.all_test_predict.keys()),
-            index=self.index,
-            index_freq=self.index_freq
+            y_true      = self.test_y.to_numpy(),
+            y_pred      = list(self.all_test_predict.values()),
+            y_pred_name = list(self.all_test_predict.keys()),
+            index       = self.data[:,self.col],
+            index_freq  = self.index_freq
         )
         
         
