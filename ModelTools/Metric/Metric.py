@@ -8,10 +8,9 @@ from tabulate import tabulate
 
 from .utils import plot_gg
 from .utils import plot_alt
+from ..tools.Pca import Pca
 
 # warnings.filterwarnings("ignore")
-
-#TODO 增加图形的交互功能
 
 class Metric:
     """
@@ -161,9 +160,10 @@ class Metric:
     def plot_metric_scatter(self,type='bias_var'):
         if type == 'bias_var':
             metric = self.get_metric(type='resid')
+            plot = plot_alt.plot_metric_bias_var(data=metric)
         elif type == 'pca':
             metric = self.get_metric(type='eval')
-        plot = plot_alt.plot_metric_scatter(data=metric,type=type)
+            plot = Pca(data=metric,scale=True).plot_bio()
         return plot
     
     #TODO 分块可视化metric变化的趋势
