@@ -11,18 +11,19 @@ from .utils import plot_alt
 from ..tools.Pca import Pca
 
 # warnings.filterwarnings("ignore")
-
+# TODO 增加highlight功能
 class Metric:
     """
     预测效果的评估指标
     """
     
-    def __init__(self, y_true:np.ndarray, y_pred:list, y_pred_name:list = None, y_name = 'y', index:pd.DatetimeIndex = None, index_freq:str = None) -> None:
-        self.y_true   = np.array(y_true)
-        self.y_pred   = y_pred if isinstance(y_pred,list) else [y_pred]
-        self.y_pred   = [np.array(pred) for pred in self.y_pred]
-        self.sample_n = len(self.y_true)
-        self.y_pred_n = len(self.y_pred)
+    def __init__(self, y_true:np.ndarray, y_pred:list, y_pred_name:list = None, y_name = 'y', 
+                 index:pd.DatetimeIndex = None, index_freq:str = None, **kwargs) -> None:
+        self.y_true    = np.array(y_true)
+        self.y_pred    = y_pred if isinstance(y_pred,list) else [y_pred]
+        self.y_pred    = [np.array(pred) for pred in self.y_pred]
+        self.sample_n  = len(self.y_true)
+        self.y_pred_n  = len(self.y_pred)
         
         # 真实值与预测值的的长度校验
         for pred in self.y_pred:
@@ -32,6 +33,7 @@ class Metric:
         self.y_pred_name = y_pred_name if isinstance(y_pred_name,list) else [y_pred_name]
         if (y_pred_name is not None) and (len(self.y_pred) != len(self.y_pred_name)):
             raise Exception('Wrong')
+        self.other_kwargs = kwargs
         
         self.y_name       = y_name
         self.y_pred_name  = [f'Pred_{y_name}_{i}' for i in range(self.y_pred_n)] if y_pred_name is None else [f'Pred_{name}' for name in y_pred_name]
