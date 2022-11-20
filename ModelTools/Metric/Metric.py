@@ -18,7 +18,7 @@ class Metric:
     """
     
     def __init__(self, y_true:np.ndarray, y_pred:list, y_pred_name:list = None, y_name = 'y', 
-                 index:pd.DatetimeIndex = None, index_freq:str = None, **kwargs) -> None:
+                 index:pd.DatetimeIndex = None, index_freq:str = None, highlight:dict = None) -> None:
         self.y_true    = np.array(y_true)
         self.y_pred    = y_pred if isinstance(y_pred,list) else [y_pred]
         self.y_pred    = [np.array(pred) for pred in self.y_pred]
@@ -33,7 +33,7 @@ class Metric:
         self.y_pred_name = y_pred_name if isinstance(y_pred_name,list) else [y_pred_name]
         if (y_pred_name is not None) and (len(self.y_pred) != len(self.y_pred_name)):
             raise Exception('Wrong')
-        self.other_kwargs = kwargs
+        self.highlight = {} if highlight is None else highlight
         
         self.y_name       = y_name
         self.y_pred_name  = [f'Pred_{y_name}_{i}' for i in range(self.y_pred_n)] if y_pred_name is None else [f'Pred_{name}' for name in y_pred_name]
@@ -78,7 +78,7 @@ class Metric:
             .pipe(pd.wide_to_long,stubnames=['Pred','Resid','Outlier'],i='Time',j='Method',suffix='\w+',sep='_')
             .reset_index()
             .infer_objects()
-            .assign(Method=lambda dt:'Pred_'+dt.Method)
+            .assign(Highlight = lambda dt:dt.Method.map(self.highlight))
         )
         
         # 时间索引填充空缺值
@@ -91,7 +91,7 @@ class Metric:
             )
             self.data = self.data.set_index(['Time','Method']).reindex(complete_index).reset_index()
         
-    def get_metric(self,type='eval'):
+    def get_metric(self,type='eval',add_highlight_col=False):
         
         if type == 'eval':
             metric_dict = {}
@@ -120,17 +120,20 @@ class Metric:
         else:
             raise TypeError('WRONG')
         
-        metric = pd.DataFrame(metric_dict,index=self.y_pred_name).sort_index()
+        metric = pd.DataFrame(metric_dict,index=[name.strip('Pred_') for name in self.y_pred_name]).sort_index()
+        if add_highlight_col is True:
+            metric = metric.assign(Highlight = lambda dt:dt.index.map(self.highlight)).fillna({'Highlight':'Others'})
+        
         return metric
     
     def _get_plot_caption(self,type):
-        metric = self.get_metric(type=type)
+        metric = self.get_metric(type=type,add_highlight_col=False)
         if type == 'eval':
             caption = (
                 f'Sample_N={self.sample_n}\n' + 
                 tabulate(
                     metric
-                    .applymap(lambda x:'%.3f'%x)
+                    .applymap(lambda x:'%.3f'%x )
                     .apply(lambda sr:sr.str.ljust(sr.str.strip('-').str.len().max(),'0'))
                     .apply(lambda sr:metric.columns.str.cat(sr,sep=':'), axis=1, result_type='expand')
                     .reset_index(),
@@ -144,7 +147,7 @@ class Metric:
                 f'Sample_N={self.sample_n}\n' + 
                 tabulate(
                     metric
-                    .applymap(lambda x:'%.3f'%x)
+                    .applymap(lambda x:'%.3f'%x )
                     .apply(lambda sr:sr.str.ljust(sr.str.strip('-').str.len().max(),'0'))
                     .apply(lambda sr:metric.columns.str
                         .extract(r'(?<=resid_)(.+)',expand=False).dropna().str.cat(sr.values,sep=':'),
@@ -161,11 +164,11 @@ class Metric:
     
     def plot_metric_scatter(self,type='bias_var'):
         if type == 'bias_var':
-            metric = self.get_metric(type='resid')
+            metric = self.get_metric(type='resid',add_highlight_col=True)
             plot = plot_alt.plot_metric_bias_var(data=metric)
         elif type == 'pca':
-            metric = self.get_metric(type='eval')
-            plot = Pca(data=metric,scale=True).plot_bio()
+            metric = self.get_metric(type='eval',add_highlight_col=False)
+            plot = Pca(data=metric,scale=True).plot_bio(highlight=self.highlight)
         return plot
     
     #TODO 分块可视化metric变化的趋势
@@ -173,6 +176,7 @@ class Metric:
         ...
     
     def plot_TvP(self,add_lm=False, add_outlier=False, add_quantile=False, figure_size=(10, 5), scales='fixed', engine='gg'):
+        #TODO 设定展示的数量
         caption = self._get_plot_caption(type='eval')
         if engine == 'gg':
             plot = plot_gg.gg_Tvp(
@@ -196,6 +200,7 @@ class Metric:
         return plot
     
     def plot_Pts(self,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed',engine='gg'):
+        #TODO 设定展示的数量
         caption = self._get_plot_caption(type='eval')
         if engine == 'gg':
             plot = plot_gg.gg_Pts(
@@ -216,6 +221,7 @@ class Metric:
         return plot
         
     def plot_Rts(self,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed',engine='gg'):
+        #TODO 设定展示的数量
         caption = self._get_plot_caption(type='resid')
         if engine == 'gg':
             plot = plot_gg.gg_Rts(

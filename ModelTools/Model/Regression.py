@@ -3,18 +3,23 @@
 import numpy as np
 import pandas as pd
 
-from sklearn.model_selection import train_test_split,TimeSeriesSplit,GridSearchCV
+from sklearn.model_selection import (
+    train_test_split,
+    TimeSeriesSplit,
+    KFold,
+    GridSearchCV
+)
 from tqdm import tqdm
 
 from . import model_config as mc
 from ..Metric.Metric import Metric
 
 class Regression:
-    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,col_ts:str=None,ts_freq=None,cv_method='ts',cv_split:int=5) -> None:
-        self.data = data 
-        self.col_x = col_x
-        self.col_y = col_y
-        self.col_ts = col_ts
+    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,col_ts:str=None,ts_freq=None,cv_method='TS',cv_split:int=5) -> None:
+        self.data    = data
+        self.col_x   = col_x
+        self.col_y   = col_y
+        self.col_ts  = col_ts
         self.ts_freq = ts_freq
         
         self.train_data, self.test_data = train_test_split(data, test_size=0.3, random_state=0, shuffle=False)
@@ -23,9 +28,10 @@ class Regression:
         self.test_x  = self.test_data.loc[:,self.col_x]
         self.test_y  = self.test_data.loc[:,self.col_y]
         
-        if cv_method == 'ts':
+        if cv_method == 'TS':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
-            #TODO 增加其他交叉验证的方法
+        elif cv_method == 'KFold':
+            self.cv_method = KFold(n_splits=cv_split,shuffle=True,random_state=0)
         
         self.all_model        = {} # 每个value都是GridSearchCV对象
         self.all_param        = {}
@@ -36,6 +42,31 @@ class Regression:
         self.best_model       = None
         self.final_model      = None
         
+        self.Metric = None
+        
+    @staticmethod   
+    def get_model_cv(struct:str,cv,estimator=None,param_grid=None):
+        if isinstance(struct,str):
+            # 解析模型结构字符
+            estimator  = mc.struct_to_estimator(struct)
+            param_grid = mc.struct_to_param(struct)  
+        else:
+            estimator  = estimator
+            param_grid = param_grid
+            # TODO 输入模型，输出GridSearchCV中可以作为estimator的对象，此处的代码可以是该对象规则的校验
+        
+        # 网格搜索的交叉验证方法
+        search = GridSearchCV(
+            estimator          = estimator,
+            param_grid         = param_grid,
+            refit              = True,
+            cv                 = cv,
+            return_train_score = True,
+            n_jobs             = -1,
+            scoring            = 'neg_mean_squared_error'
+        )
+        return search
+        
     def fit(self,add_models:list=None):
         model_struct = mc.base_struct if add_models is None else [*mc.base_struct,*add_models]
         model_struct = list(set(model_struct))
@@ -44,13 +75,13 @@ class Regression:
         for struct in tqdm(model_struct):
             if isinstance(struct,str):
                 name  = struct
-                model = get_model_cv(struct=struct,cv=self.cv_method)
+                model = self.get_model_cv(struct=struct,cv=self.cv_method)
             elif isinstance(struct,dict):
                 #TODO 此处未测试
                 name       = struct['name']
                 estimator  = struct['estimator']
                 param_grid = struct['param_grid']
-                model = get_model_cv(estimator=estimator,param_grid=param_grid,cv=self.cv_method)
+                model = self.get_model_cv(estimator=estimator,param_grid=param_grid,cv=self.cv_method)
             
             if name not in self.all_model.keys():
                 model.fit(X=self.train_data.loc[:,self.col_x], y=self.train_data.loc[:,self.col_y])
@@ -63,7 +94,7 @@ class Regression:
         # 通过各模型在训练集上的得分，初始化最佳模型
         self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
         self.best_model      = self.all_model.get(self.best_model_name)
-        print(f'The best model is {self.best_model_name}')
+        print(f'Best Model : {self.best_model_name}')
         
         # 各个模型在测试集上的效果评估
         self.Metric = Metric(
@@ -72,40 +103,16 @@ class Regression:
             y_pred_name = list(self.all_test_predict.keys()),
             index       = self.test_data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
-            hightlight  = [self.best_model_name]
+            highlight   = {self.best_model_name:'Best_Model'}
         )
 
-    def add_model(self):
-        #TODO 输入模型并训练，并将结果输入至all相关的参数内
-        ...
-        
     def check_split(self):
         ...
     
     def fit_final_model(self,model='best_model',save_path=None):
+        #TODO 将训练集与测试集的数据合并后重新训练一个模型
         ...
-        
-def get_model_cv(struct:str,cv,estimator=None,param_grid=None):
-    if isinstance(struct,str):
-        # 解析模型结构字符
-        estimator  = mc.struct_to_estimator(struct)
-        param_grid = mc.struct_to_param(struct)  
-    else:
-        estimator  = estimator
-        param_grid = param_grid
-        # TODO 输入模型，输出GridSearchCV中可以作为estimator的对象，此处的代码可以是该对象规则的校验
     
-    # 网格搜索的交叉验证方法
-    search = GridSearchCV(
-        estimator          = estimator,
-        param_grid         = param_grid,
-        refit              = True,
-        cv                 = cv,
-        return_train_score = True,
-        n_jobs             = -1,
-        scoring            = 'neg_mean_squared_error'
-    )
-    return search
 
 
 if __name__ == '__main__':

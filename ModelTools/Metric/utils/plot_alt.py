@@ -1,8 +1,5 @@
 import pandas as pd
 import altair as alt 
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.pipeline import Pipeline
 
 def plot_TvP(data,y_name,scales='fixed',select=None):
     base_Chart = alt.Chart(data)
@@ -64,11 +61,14 @@ def scatter(base_Chart,y_name,scales,select):
     return plot
 
 def plot_metric_bias_var(data):
-    #TODO 增加两条辅助线
+    #TODO 增加两条辅助线 总体水平线
+    #TODO 增加x轴的零点线
     #TODO 增加均值方差
     plot = alt.Chart(data.reset_index()).mark_circle().encode(
         x = 'resid_Median',
         y = alt.Y('resid_IQR',scale=alt.Scale(zero=False)),
         tooltip = 'index'
     )
+    if not (data.Highlight=='Others').all():
+        plot = plot.encode(color = alt.Color('Highlight:N',title=None))
     return plot

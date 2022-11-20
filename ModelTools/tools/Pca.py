@@ -11,6 +11,10 @@ class Pca:
         self.data = data 
         self.scale = scale
         
+        if self.data.shape[1]>self.data.shape[0]:
+            #TODO 会导致loadings的shape出现问题，研究此处的理论
+            raise Exception(f'数据的列数{self.data.shape[1]} > 行数{self.data.shape[0]}')
+        
         self.var           = None # 方差
         self.var_ratio     = None # 方差占比
         self.var_cum_ratio = None # 累计方差占比
@@ -21,12 +25,15 @@ class Pca:
     
     def _fit(self):
         # TODO 检查数据是否都是数值型
-        pca = Pipeline([('std',StandardScaler(with_mean=self.scale,with_std=self.scale)),('pca',PCA())])
+        pca = Pipeline([
+            ('std',StandardScaler(with_mean=self.scale,with_std=self.scale)),
+            ('pca',PCA(svd_solver='auto'))
+        ])
         pca.fit(self.data)
         self._pc_name = [f'PC{i}' for i in range(1,self.data.shape[1]+1)]
         
-        self.var = pca['pca'].explained_variance_
-        self.var_ratio = pca['pca'].explained_variance_ratio_
+        self.var           = pca['pca'].explained_variance_
+        self.var_ratio     = pca['pca'].explained_variance_ratio_
         self.var_cum_ratio = np.cumsum(self.var_ratio).round(4)
         self.pcs = pd.DataFrame({
             'pc'           : self._pc_name,
@@ -60,9 +67,15 @@ class Pca:
         plot = (point + line).properties(width=500)
         return plot 
     
-    def plot_bio(self):
+    def plot_bio(self,highlight:dict=None):
+        highlight = {} if highlight is None else highlight
+        data = (
+            pd.concat([self.score.reset_index(),self.data.reset_index(drop=True)],axis=1)
+            .assign(Highlight = lambda dt:dt.loc[:,'index'].map(highlight))
+            .fillna({'Highlight':'Others'})
+        )
         base = alt.Chart(
-            pd.concat([self.score.reset_index(),self.data.reset_index(drop=True)],axis=1),
+            data,
             title=f'BioPlot ({round(self.var_cum_ratio[1]*100,2)}%)'
         )
         point = base.mark_circle().encode(
@@ -70,6 +83,11 @@ class Pca:
             y       = alt.X('PC2',title=f'PC2 ({round(self.var_ratio[1]*100,2)}%)'),
             tooltip = alt.Tooltip(['index']+self.data.columns.to_list())
         )
+        if not (data.Highlight=='Others').all():
+            point = point.encode(
+                color = alt.Color('Highlight:N',title=None,
+                                  legend=alt.Legend(direction='horizontal',orient='bottom',titleAnchor='middle'))
+                )
         
         vline = base.mark_rule(strokeDash=[12, 6],size=1).encode(x=alt.datum(0))
         hline = base.mark_rule(strokeDash=[12, 6],size=1).encode(y=alt.datum(0))
@@ -95,9 +113,9 @@ if __name__ == '__main__':
     n = 5
     rng = np.random.default_rng(0)
     x = rng.multivariate_normal(
-        mean=rng.normal(size=5,scale=2),
+        mean=rng.normal(size=n,scale=2),
         cov=make_spd_matrix(n_dim=n,random_state=0),
-        size=200
+        size=5
     )
     df = pd.DataFrame(data=x,columns=[f'x{i}' for i in range(n)])
     pc = Pca(df)
