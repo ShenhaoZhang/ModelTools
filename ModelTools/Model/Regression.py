@@ -1,8 +1,6 @@
-# 可自定义PIPELINE
-# 可依次添加PIPELINE
 import numpy as np
 import pandas as pd
-
+from sklearn.base import clone
 from sklearn.model_selection import (
     train_test_split,
     TimeSeriesSplit,
@@ -13,17 +11,20 @@ from tqdm import tqdm
 
 from . import model_config as mc
 from ..Metric.Metric import Metric
+from ..Explain.Explain import Explain
 
 class Regression:
-    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,col_ts:str=None,ts_freq=None,cv_method='TS',cv_split:int=5) -> None:
+    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,col_ts:str=None,ts_freq=None,test_size=0.3,cv_method='TS',cv_split:int=5) -> None:
         self.data    = data
         self.col_x   = col_x
         self.col_y   = col_y
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
+        if col_ts is not None and ts_freq is None:
+            raise Exception('Missing ts_freq')
         
         #TODO 若cv_method为TS时给数据按时间顺序排个序
-        self.train_data, self.test_data = train_test_split(data, test_size=0.3, random_state=0, shuffle=False)
+        self.train_data, self.test_data = train_test_split(data, test_size=test_size, random_state=0, shuffle=False)
         self.train_x = self.train_data.loc[:,self.col_x]
         self.train_y = self.train_data.loc[:,self.col_y]
         self.test_x  = self.test_data.loc[:,self.col_x]
@@ -32,7 +33,7 @@ class Regression:
         if cv_method == 'TS':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
         elif cv_method == 'KFold':
-            self.cv_method = KFold(n_splits=cv_split,shuffle=True,random_state=0)
+            self.cv_method = KFold(n_splits=cv_split, shuffle=True, random_state=0)
         
         self.all_model        = {}  # 每个value都是GridSearchCV对象
         self.all_param        = {}
@@ -110,6 +111,24 @@ class Regression:
             index       = self.test_data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
             highlight   = {self.best_model_name:'Best_Model (Train)'}
+        )
+        
+        # 解释模型
+        self.ExpMod = Explain(
+            model      = self.best_model,
+            model_type = 'regression',
+            data_x     = self.test_x,
+            data_y     = self.test_y
+        )
+        
+        # 解释测试集上的预测误差
+        abs_resid = np.abs(self.test_y - self.best_model.predict(self.test_x))
+        resid_model = clone(self.best_model).fit(self.test_x,abs_resid)
+        self.ExpResid = Explain(
+            model      = resid_model,
+            model_type = 'regression',
+            data_x     = self.test_x,
+            data_y     = abs_resid
         )
 
     def check_train_split(self):
