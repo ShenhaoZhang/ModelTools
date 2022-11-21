@@ -22,6 +22,7 @@ class Regression:
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
         
+        #TODO 若cv_method为TS时给数据按时间顺序排个序
         self.train_data, self.test_data = train_test_split(data, test_size=0.3, random_state=0, shuffle=False)
         self.train_x = self.train_data.loc[:,self.col_x]
         self.train_y = self.train_data.loc[:,self.col_y]
@@ -33,16 +34,19 @@ class Regression:
         elif cv_method == 'KFold':
             self.cv_method = KFold(n_splits=cv_split,shuffle=True,random_state=0)
         
-        self.all_model        = {} # 每个value都是GridSearchCV对象
+        self.all_model        = {}  # 每个value都是GridSearchCV对象
         self.all_param        = {}
         self.all_train_info   = {}
-        self.all_train_score  = {} # 该得分将MSE等指标取负值，从而使得该指标越大越好
+        self.all_train_score  = {}  # 该得分将MSE等指标取负值，从而使得该指标越大越好
         self.all_test_predict = {}
         self.best_model_name  = {}
         self.best_model       = None
         self.final_model      = None
         
-        self.Metric = None
+        self.Data     = None  # 数据的探索性分析
+        self.Metric   = None  # 模型在测试集上的效果评价
+        self.ExpMod   = None  # 基于模型的解释
+        self.ExpResid = None  # 基于测试集残差的解释
         
     @staticmethod   
     def get_model_cv(struct:str,cv,estimator=None,param_grid=None):
@@ -68,6 +72,7 @@ class Regression:
         return search
         
     def fit(self,add_models:list=None):
+        add_models   = [add_models] if (add_models is not None) and (not isinstance(add_models,list)) else add_models
         model_struct = mc.base_struct if add_models is None else [*mc.base_struct,*add_models]
         model_struct = list(set(model_struct))
         # TODO 需要增加对add_models的校验
@@ -95,6 +100,7 @@ class Regression:
         self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
         self.best_model      = self.all_model.get(self.best_model_name)
         print(f'Best Model : {self.best_model_name}')
+        # TODO 打印最佳模型的指标
         
         # 各个模型在测试集上的效果评估
         self.Metric = Metric(
@@ -106,7 +112,7 @@ class Regression:
             highlight   = {self.best_model_name:'Best_Model (Train)'}
         )
 
-    def check_split(self):
+    def check_train_split(self):
         ...
     
     def fit_final_model(self,model='best_model',save_path=None):
