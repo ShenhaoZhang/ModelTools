@@ -6,8 +6,8 @@ from scipy import stats
 from sklearn import metrics
 from tabulate import tabulate
 
-from .utils import plot_gg
-from .utils import plot_alt
+from . import plot_gg
+from . import plot_alt
 from ..tools.Pca import Pca
 
 # warnings.filterwarnings("ignore")
@@ -162,10 +162,14 @@ class Metric:
     
     #TODO 考虑使用装饰器来处理多函数有相同输入的问题
     
-    def plot_metric_scatter(self,type='bias_var'):
-        if type == 'bias_var':
+    def plot_metric_scatter(self,type='bv'):
+        #TODO 图像增加标题告知是模型在测试集上的效果
+        if type == 'bv':
             metric = self.get_metric(type='resid',add_highlight_col=True)
-            plot = plot_alt.plot_metric_bias_var(data=metric)
+            plot = plot_alt.plot_metric_bias_var(data=metric,robust=False)
+        elif type == 'bv_robust':
+            metric = self.get_metric(type='resid',add_highlight_col=True)
+            plot = plot_alt.plot_metric_bias_var(data=metric,robust=True)
         elif type == 'pca':
             metric = self.get_metric(type='eval',add_highlight_col=False)
             plot = Pca(data=metric,scale=True).plot_bio(highlight=self.highlight)

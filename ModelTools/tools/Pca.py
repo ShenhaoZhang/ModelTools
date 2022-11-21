@@ -86,7 +86,7 @@ class Pca:
         if not (data.Highlight=='Others').all():
             point = point.encode(
                 color = alt.Color('Highlight:N',title=None,
-                                  legend=alt.Legend(direction='horizontal',orient='bottom',titleAnchor='middle'))
+                                  legend=alt.Legend(direction='horizontal',orient='bottom'))
                 )
         
         vline = base.mark_rule(strokeDash=[12, 6],size=1).encode(x=alt.datum(0))

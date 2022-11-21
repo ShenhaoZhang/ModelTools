@@ -60,15 +60,22 @@ def scatter(base_Chart,y_name,scales,select):
     
     return plot
 
-def plot_metric_bias_var(data):
+def plot_metric_bias_var(data,robust=False):
     #TODO 增加两条辅助线 总体水平线
-    #TODO 增加x轴的零点线
-    #TODO 增加均值方差
-    plot = alt.Chart(data.reset_index()).mark_circle().encode(
-        x = 'resid_Median',
-        y = alt.Y('resid_IQR',scale=alt.Scale(zero=False)),
+    base = alt.Chart(data.reset_index())
+    point = base.mark_circle().encode(
+        x = 'resid_Mean',
+        y = alt.Y('resid_SD',scale=alt.Scale(zero=False)),
         tooltip = 'index'
     )
+    if robust:
+        point = point.encode(
+            x = 'resid_Median',
+            y = alt.Y('resid_IQR',scale=alt.Scale(zero=False)),
+        )
     if not (data.Highlight=='Others').all():
-        plot = plot.encode(color = alt.Color('Highlight:N',title=None))
+        point = point.encode(color = alt.Color('Highlight:N',title=None))
+    vline = base.mark_rule(color='red',size=3).encode(x=alt.datum(0))
+    plot = point + vline
+
     return plot

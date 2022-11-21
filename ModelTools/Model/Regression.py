@@ -103,7 +103,7 @@ class Regression:
             y_pred_name = list(self.all_test_predict.keys()),
             index       = self.test_data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
-            highlight   = {self.best_model_name:'Best_Model'}
+            highlight   = {self.best_model_name:'Best_Model (Train)'}
         )
 
     def check_split(self):
