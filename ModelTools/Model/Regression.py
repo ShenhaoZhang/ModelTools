@@ -1,3 +1,7 @@
+import sys 
+import os 
+import warnings
+
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
@@ -12,6 +16,10 @@ from tqdm import tqdm
 from . import model_config as mc
 from ..Metric.Metric import Metric
 from ..Explain.Explain import Explain
+
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+    os.environ["PYTHONWARNINGS"] = ('ignore::UserWarning,ignore::RuntimeWarning')
 
 class Regression:
     def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,col_ts:str=None,ts_freq=None,test_size=0.3,cv_method='TS',cv_split:int=5) -> None:
@@ -35,19 +43,21 @@ class Regression:
         elif cv_method == 'KFold':
             self.cv_method = KFold(n_splits=cv_split, shuffle=True, random_state=0)
         
-        self.all_model        = {}  # 每个value都是GridSearchCV对象
-        self.all_param        = {}
-        self.all_train_info   = {}
-        self.all_train_score  = {}  # 该得分将MSE等指标取负值，从而使得该指标越大越好
-        self.all_test_predict = {}
-        self.best_model_name  = {}
-        self.best_model       = None
-        self.final_model      = None
+        self.all_model         = {}  # 每个value都是GridSearchCV对象
+        self.all_param         = {}
+        self.all_cv_results    = {}
+        self.all_train_score   = {}  # 该得分将MSE等指标取负值，从而使得该指标越大越好
+        self.all_train_predict = {}
+        self.all_test_predict  = {}
+        self.best_model_name   = {}
+        self.best_model        = None
+        self.final_model       = None
         
-        self.Data     = None  # 数据的探索性分析
-        self.Metric   = None  # 模型在测试集上的效果评价
-        self.ExpMod   = None  # 基于模型的解释
-        self.ExpResid = None  # 基于测试集残差的解释
+        self.Data        = None  # 数据的探索性分析
+        self.MetricTrain = None  # 模型在训练集上的效果评价
+        self.MetricTest  = None  # 模型在测试集上的效果评价
+        self.ExpMod      = None  # 基于模型的解释
+        self.ExpResid    = None  # 基于测试集残差的解释
         
     @staticmethod   
     def get_model_cv(struct:str,cv,estimator=None,param_grid=None):
@@ -71,7 +81,7 @@ class Regression:
             scoring            = 'neg_mean_squared_error'
         )
         return search
-        
+    
     def fit(self,add_models:list=None):
         add_models   = [add_models] if (add_models is not None) and (not isinstance(add_models,list)) else add_models
         model_struct = mc.base_struct if add_models is None else [*mc.base_struct,*add_models]
@@ -91,20 +101,39 @@ class Regression:
             
             if name not in self.all_model.keys():
                 model.fit(X=self.train_data.loc[:,self.col_x], y=self.train_data.loc[:,self.col_y])
-                self.all_model       [name] = model
-                self.all_param       [name] = model.best_params_
-                self.all_train_info  [name] = model.cv_results_
-                self.all_train_score [name] = model.best_score_
-                self.all_test_predict[name] = model.predict(self.test_x)
+                self.all_model         [name] = model
+                self.all_param         [name] = model.best_params_
+                self.all_cv_results    [name] = model.cv_results_
+                self.all_train_predict [name] = model.predict(self.train_x)
+                self.all_train_score   [name] = model.best_score_
+                self.all_test_predict  [name] = model.predict(self.test_x)
         
         # 通过各模型在训练集上的得分，初始化最佳模型
         self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
         self.best_model      = self.all_model.get(self.best_model_name)
-        print(f'Best Model : {self.best_model_name}')
+        message = f'''
+        Best Model : {self.best_model_name}
+        
+        Regression.MetricTrain : 模型在训练集上的效果评价
+        Regression.MetricTest  : 模型在测试集上的效果评价
+        Regression.ExpResid    : 基于模型的残差解释
+        Regression.ExpMod      : 基于模型的特征解释
+        '''
+        print(message)
         # TODO 打印最佳模型的指标
         
+        # 各个模型在训练集上的效果评估
+        self.MetricTrain = Metric(
+            y_true      = self.train_y.to_numpy(),
+            y_pred      = list(self.all_train_predict.values()),
+            y_pred_name = list(self.all_train_predict.keys()),
+            index       = self.train_data.loc[:,self.col_ts],
+            index_freq  = self.ts_freq, 
+            highlight   = {self.best_model_name:'Best_Model (CV)'}
+        )
+        
         # 各个模型在测试集上的效果评估
-        self.Metric = Metric(
+        self.MetricTest = Metric(
             y_true      = self.test_y.to_numpy(),
             y_pred      = list(self.all_test_predict.values()),
             y_pred_name = list(self.all_test_predict.keys()),

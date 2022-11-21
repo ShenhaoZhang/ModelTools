@@ -62,11 +62,12 @@ def scatter(base_Chart,y_name,scales,select):
 
 def plot_metric_bias_var(data,robust=False):
     #TODO 增加两条辅助线 总体水平线
-    base = alt.Chart(data.reset_index())
+    data = data.reset_index()
+    base = alt.Chart(data)
     point = base.mark_circle().encode(
         x = 'resid_Mean',
         y = alt.Y('resid_SD',scale=alt.Scale(zero=False)),
-        tooltip = 'index'
+        tooltip = data.drop('Highlight',axis=1).columns.to_list()
     )
     if robust:
         point = point.encode(
@@ -74,8 +75,10 @@ def plot_metric_bias_var(data,robust=False):
             y = alt.Y('resid_IQR',scale=alt.Scale(zero=False)),
         )
     if not (data.Highlight=='Others').all():
-        point = point.encode(color = alt.Color('Highlight:N',title=None))
-    vline = base.mark_rule(color='red',size=3).encode(x=alt.datum(0))
+        point = point.encode(color = alt.Color(
+            'Highlight:N',title=None,
+            legend=alt.Legend(direction='horizontal',orient='bottom')))
+    vline = base.mark_rule(color='red',size=2).encode(x=alt.datum(0))
     plot = point + vline
 
     return plot

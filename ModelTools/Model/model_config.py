@@ -12,7 +12,7 @@ preprocess = {
 
 model = {
     'OLS'  : lm.LinearRegression(),
-    'HUBER': lm.HuberRegressor(max_iter=500),
+    'HUBER': lm.HuberRegressor(max_iter=1000),
     'EN'   : lm.ElasticNetCV(),
     'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0)
 }
