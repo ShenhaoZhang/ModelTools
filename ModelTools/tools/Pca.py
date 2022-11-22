@@ -82,7 +82,7 @@ class Pca:
             x       = alt.X('PC1',title=f'PC1 ({round(self.var_ratio[0]*100,2)}%)'),
             y       = alt.X('PC2',title=f'PC2 ({round(self.var_ratio[1]*100,2)}%)'),
             tooltip = alt.Tooltip(['index']+self.data.columns.to_list())
-        )
+        ).interactive()
         if not (data.Highlight=='Others').all():
             point = point.encode(
                 color = alt.Color('Highlight:N',title=None,
@@ -103,7 +103,7 @@ class Pca:
         ).properties(width=bar_width)
 
         plot = bar_pc1 & ((point+hline+vline)|bar_pc2)
-        return plot 
+        return plot
 
 #%%
 if __name__ == '__main__':

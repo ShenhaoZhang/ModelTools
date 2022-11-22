@@ -24,10 +24,12 @@ if not sys.warnoptions:
     os.environ["PYTHONWARNINGS"] = ('ignore::UserWarning,ignore::RuntimeWarning')
 
 class Regression:
-    def __init__(self,data:pd.DataFrame,col_x:list,col_y:str,col_ts:str=None,ts_freq=None,test_size=0.3,cv_method='TS',cv_split:int=5) -> None:
+    def __init__(self, data:pd.DataFrame, col_x:list, col_y:str, col_ts:str = None, ts_freq = None, 
+                 test_size:float = 0.3, cv_method:str = 'TS', cv_split:int = 5 ) -> None:
         self.data    = data
         self.col_x   = col_x if isinstance(col_x,list) else [col_x]
         self.col_y   = col_y if isinstance(col_y,str) else col_y[0]
+        
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
         if col_ts is not None and ts_freq is None:
@@ -213,8 +215,13 @@ class Regression:
             index_freq  = self.ts_freq, 
         )
         if print_result:
-            print(f'Final Model : {final_model_name}')
-        #TODO 增加最终模型的指标
+            final_model_matric = self.MetricFinal.get_metric().round(4)
+            final_model_matric.index = ['Train & Test']
+            message = (
+                f'Final Model : {final_model_name} \n'
+                f"{tabulate(final_model_matric,headers=final_model_matric.columns)}"
+            )
+            print(message)
     
     def predict(self):
         #TODO 置信区间的预测

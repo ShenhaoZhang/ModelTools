@@ -3,7 +3,7 @@ import altair as alt
 
 def plot_TvP(data,y_name,scales='fixed',select=None):
     base_Chart = alt.Chart(data)
-    plot = scatter(
+    plot = _tvp_scatter(
         base_Chart = base_Chart,
         y_name     = y_name,
         scales     = scales,
@@ -16,8 +16,8 @@ def plot_Pts(data,y_name):
     plot_v = []
     for method in data.Method.unique():
         data_method = data.loc[lambda dt:dt.Method==method]
-        base_Chart = alt.Chart(data_method)
-        tvp = scatter(
+        base_Chart = alt.Chart(data_method,title=method)
+        tvp = _tvp_scatter(
             base_Chart = base_Chart,
             y_name     = y_name,
             select     = select,
@@ -31,7 +31,32 @@ def plot_Pts(data,y_name):
     plot_v = alt.vconcat(*plot_v)
     return plot_v
 
-def scatter(base_Chart,y_name,scales,select):
+def plot_Rts(data,y_name):
+    ...
+
+def plot_metric_bias_var(data,type='bv'):
+    data = data.reset_index()
+    base = alt.Chart(data)
+    point = base.mark_circle().encode(
+        x = 'resid_Mean',
+        y = alt.Y('resid_SD',scale=alt.Scale(zero=False)),
+        tooltip = data.drop('Highlight',axis=1).columns.to_list()
+    )
+    if type == 'bv_robust':
+        point = point.encode(
+            x = 'resid_Median',
+            y = alt.Y('resid_IQR',scale=alt.Scale(zero=False)),
+        )
+    if not (data.Highlight=='Others').all():
+        point = point.encode(color = alt.Color(
+            'Highlight:N',title=None,
+            legend=alt.Legend(direction='horizontal',orient='bottom')))
+    vline = base.mark_rule(color='red',size=2).encode(x=alt.datum(0))
+    plot = (point + vline).interactive()
+
+    return plot
+
+def _tvp_scatter(base_Chart,y_name,scales,select):
     # 散点
     point_black = base_Chart.mark_circle(color='black').encode(
         x = f'True_{y_name}',
@@ -60,25 +85,3 @@ def scatter(base_Chart,y_name,scales,select):
     
     return plot
 
-def plot_metric_bias_var(data,robust=False):
-    #TODO 增加两条辅助线 总体水平线
-    data = data.reset_index()
-    base = alt.Chart(data)
-    point = base.mark_circle().encode(
-        x = 'resid_Mean',
-        y = alt.Y('resid_SD',scale=alt.Scale(zero=False)),
-        tooltip = data.drop('Highlight',axis=1).columns.to_list()
-    )
-    if robust:
-        point = point.encode(
-            x = 'resid_Median',
-            y = alt.Y('resid_IQR',scale=alt.Scale(zero=False)),
-        )
-    if not (data.Highlight=='Others').all():
-        point = point.encode(color = alt.Color(
-            'Highlight:N',title=None,
-            legend=alt.Legend(direction='horizontal',orient='bottom')))
-    vline = base.mark_rule(color='red',size=2).encode(x=alt.datum(0))
-    plot = point + vline
-
-    return plot

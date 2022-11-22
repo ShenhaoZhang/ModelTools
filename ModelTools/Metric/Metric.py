@@ -9,7 +9,7 @@ from . import plot_alt
 from ..tools.Pca import Pca
 
 # warnings.filterwarnings("ignore")
-# TODO 增加highlight功能
+
 class Metric:
     """
     预测效果的评估指标
@@ -52,6 +52,21 @@ class Metric:
                 raise ValueError('WRONG')
         self.index       = np.arange(self.sample_n) if index is None else index
         self.index_freq  = index_freq
+        
+        # 限定评估的数量
+        highlight_count = len(self.highlight)
+        if highlight_count >= 6:
+            self.focus = list(self.highlight.keys())
+        else:
+            top_metric_count = 6 - highlight_count
+            top_metric = (
+                self.get_metric()
+                .drop(list(self.highlight.keys()))
+                .sort_values(by='MSE')
+                .head(top_metric_count)
+                .index.to_list()
+            )
+            self.focus = list(self.highlight.keys()) + top_metric
         
         self.data = None
         self._init_data()
@@ -102,12 +117,11 @@ class Metric:
             metric_dict['MaxE'] = lambda y_pred : metrics.max_error(self.y_true,y_pred)
             metric_dict['SAE']  = lambda y_pred : np.std(np.abs(y_pred - self.y_true))
             metric_dict['SAPE'] = lambda y_pred : np.std(np.abs((y_pred - self.y_true) / self.y_true))
-            #TODO MdAE std_MAE(iqr) std_MAPE(iqr)
+            
             metric_dict = {name:list(map(func,self.y_pred)) for name,func in metric_dict.items()}
             
         elif type == 'resid':
             #TODO 增加ACF特征
-            #TODO 仿照上面的代码修改下面
             metric_dict = {}
             metric_dict['Mean']   = np.mean
             metric_dict['Median'] = np.median
@@ -161,31 +175,30 @@ class Metric:
             )
         return caption
     
-    #TODO 考虑使用装饰器来处理多函数有相同输入的问题
-    
     def plot_metric_scatter(self,type='bv'):
+        
         #TODO 处理异常大的值导致的可视化问题
-        if type == 'bv':
-            metric = self.get_metric(type='resid',add_highlight_col=True)
-            plot = plot_alt.plot_metric_bias_var(data=metric,robust=False)
-        elif type == 'bv_robust':
-            metric = self.get_metric(type='resid',add_highlight_col=True)
-            plot = plot_alt.plot_metric_bias_var(data=metric,robust=True)
+        if type in ['bv','bv_robust']:
+            metric = self.get_metric(type = 'resid', add_highlight_col = True)
+            plot = plot_alt.plot_metric_bias_var(data = metric, type = type)
         elif type == 'pca':
-            metric = self.get_metric(type='eval',add_highlight_col=False)
-            plot = Pca(data=metric,scale=True).plot_bio(highlight=self.highlight)
+            metric = self.get_metric(type = 'eval', add_highlight_col = False)
+            plot = Pca(data = metric,scale = True).plot_bio(highlight = self.highlight)
+            
         return plot
     
     #TODO 分块可视化metric变化的趋势
     def plot_metric_trend(self):
         ...
     
-    def plot_TvP(self,add_lm=False, add_outlier=False, add_quantile=False, figure_size=(10, 5), scales='fixed', engine='gg'):
-        #TODO 设定展示的数量
+    def plot_TvP(self,focus:list = None, add_lm=False, add_outlier=False, add_quantile=False, figure_size=(10, 5), scales='fixed', engine='gg'):
+        focus = focus if focus is not None else self.focus
+        plot_data = self.data.loc[lambda dt:dt.Method.isin(focus)]
+        
         caption = self._get_plot_caption(type='eval')
         if engine == 'gg':
             plot = plot_gg.gg_Tvp(
-                data         = self.data,
+                data         = plot_data,
                 y_name       = self.y_name,
                 y_pred_name  = self.y_pred_name,
                 caption      = caption,
@@ -196,20 +209,21 @@ class Metric:
                 scales       = scales
             )
         elif engine == 'alt':
-            # TODO 增加alt图像
             plot = plot_alt.plot_TvP(
-                data=self.data,
-                y_name=self.y_name,
-                scales=scales
+                data   = plot_data,
+                y_name = self.y_name,
+                scales = scales
             )
         return plot
     
-    def plot_Pts(self,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed',engine='gg'):
-        #TODO 设定展示的数量
+    def plot_Pts(self,focus:list = None,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed',engine='gg'):
+        focus = focus if focus is not None else self.focus
+        plot_data = self.data.loc[lambda dt:dt.Method.isin(focus)]
+        
         caption = self._get_plot_caption(type='eval')
         if engine == 'gg':
             plot = plot_gg.gg_Pts(
-                data         = self.data,
+                data         = plot_data,
                 y_name       = self.y_name,
                 caption      = caption,
                 time_limit   = time_limit,
@@ -218,19 +232,20 @@ class Metric:
                 scales       = scales
             )
         elif engine == 'alt':
-            # TODO 增加alt图像
             plot = plot_alt.plot_Pts(
-                data=self.data,
-                y_name=self.y_name
+                data   = plot_data,
+                y_name = self.y_name
             )
         return plot
         
-    def plot_Rts(self,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed',engine='gg'):
-        #TODO 设定展示的数量
+    def plot_Rts(self,focus:list = None,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed',engine='gg'):
+        focus = focus if focus is not None else self.focus
+        plot_data = self.data.loc[lambda dt:dt.Method.isin(focus)]
+        
         caption = self._get_plot_caption(type='resid')
         if engine == 'gg':
             plot = plot_gg.gg_Rts(
-                data         = self.data,
+                data         = plot_data,
                 caption      = caption,
                 add_iqr_line = add_iqr_line,
                 iqr          = self.resid_total_iqr,
