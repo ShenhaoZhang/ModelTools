@@ -94,11 +94,14 @@ class Metric:
         if type == 'eval':
             metric_dict = {}
             metric_dict['R2']   = lambda y_pred : metrics.r2_score(self.y_true,y_pred)
+            metric_dict['MSE']  = lambda y_pred : metrics.mean_squared_error(self.y_true,y_pred)
             metric_dict['MAE']  = lambda y_pred : metrics.mean_absolute_error(self.y_true,y_pred)
             metric_dict['MBE']  = lambda y_pred : np.mean(y_pred - self.y_true)
+            metric_dict['MdAE'] = lambda y_pred : metrics.median_absolute_error(self.y_true,y_pred)
             metric_dict['MAPE'] = lambda y_pred : metrics.mean_absolute_percentage_error(self.y_true,y_pred)
-            metric_dict['MSE']  = lambda y_pred : metrics.mean_squared_error(self.y_true,y_pred)
-            metric_dict['MAXE'] = lambda y_pred : metrics.max_error(self.y_true,y_pred)
+            metric_dict['MaxE'] = lambda y_pred : metrics.max_error(self.y_true,y_pred)
+            metric_dict['SAE']  = lambda y_pred : np.std(np.abs(y_pred - self.y_true))
+            metric_dict['SAPE'] = lambda y_pred : np.std(np.abs((y_pred - self.y_true) / self.y_true))
             #TODO MdAE std_MAE(iqr) std_MAPE(iqr)
             metric_dict = {name:list(map(func,self.y_pred)) for name,func in metric_dict.items()}
             
@@ -161,7 +164,7 @@ class Metric:
     #TODO 考虑使用装饰器来处理多函数有相同输入的问题
     
     def plot_metric_scatter(self,type='bv'):
-        #TODO 图像增加标题告知是模型在测试集上的效果
+        #TODO 处理异常大的值导致的可视化问题
         if type == 'bv':
             metric = self.get_metric(type='resid',add_highlight_col=True)
             plot = plot_alt.plot_metric_bias_var(data=metric,robust=False)

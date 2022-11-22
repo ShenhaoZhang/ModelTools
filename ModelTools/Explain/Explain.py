@@ -22,4 +22,5 @@ class Explain:
     
     def marginal_effect(self):
         plot = self.exp.model_profile(type='pdp').plot(geom='profiles')
+        #TODO 用分位数代替置信区间
         return plot

@@ -1,5 +1,6 @@
 from sklearn.base import clone
 from sklearn import linear_model as lm
+from sklearn import ensemble as en
 from sklearn import preprocessing as pr
 from sklearn.pipeline import Pipeline 
 
@@ -12,18 +13,21 @@ preprocess = {
 
 model = {
     'OLS'  : lm.LinearRegression(),
-    'HUBER': lm.HuberRegressor(max_iter=1000),
+    'HUBER': lm.HuberRegressor(),
     'EN'   : lm.ElasticNetCV(),
-    'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0)
+    'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
+    'RF'   : en.RandomForestRegressor()
 }
 
 param = {
-    'poly__degree':[1,2,3],
-    'inter__degree':[1,2,3]
+    'poly__degree'     : [1,2,3],
+    'inter__degree'    : [1,2,3],
+    'sp__extrapolation': ['constant','continue','linear'],
+    'sp__knots'        : ['uniform','quantile']
 }
 
 base_struct = [
-    'poly_OLS', 'inter_sp_OLS',
+    'poly_OLS', 'sp_OLS', 'inter_sp_OLS',
     'poly_std_HUBER', 'inter_sp_std_HUBER',
     'poly_std_EN', 'inter_sp_std_EN',
     'poly_std_QR', 'inter_sp_std_QR'
