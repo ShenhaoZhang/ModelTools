@@ -191,6 +191,7 @@ class Metric:
     def plot_metric_trend(self):
         ...
     
+    #TODO 可选日期作为y轴
     def plot_TvP(self,focus:list = None, add_lm=False, add_outlier=False, add_quantile=False, figure_size=(10, 5), scales='fixed', engine='gg'):
         focus = focus if focus is not None else self.focus
         plot_data = self.data.loc[lambda dt:dt.Method.isin(focus)]

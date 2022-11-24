@@ -67,7 +67,8 @@ class Pca:
         plot = (point + line).properties(width=500)
         return plot 
     
-    def plot_bio(self,highlight:dict=None):
+    def plot_bio(self,pc=[1,2],highlight:dict=None):
+        #TODO 可选择不同的主成分
         highlight = {} if highlight is None else highlight
         data = (
             pd.concat([self.score.reset_index(),self.data.reset_index(drop=True)],axis=1)

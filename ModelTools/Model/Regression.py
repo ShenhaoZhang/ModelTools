@@ -25,7 +25,7 @@ if not sys.warnoptions:
 
 class Regression:
     def __init__(self, data:pd.DataFrame, col_x:list, col_y:str, col_ts:str = None, ts_freq = None, 
-                 test_size:float = 0.3, cv_method:str = 'TS', cv_split:int = 5 ) -> None:
+                 test_size:float = 0.3, split_shuffle = False, cv_method:str = 'TS', cv_split:int = 5 ) -> None:
         self.data    = data
         self.col_x   = col_x if isinstance(col_x,list) else [col_x]
         self.col_y   = col_y if isinstance(col_y,str) else col_y[0]
@@ -35,9 +35,10 @@ class Regression:
         if col_ts is not None and ts_freq is None:
             raise Exception('Missing ts_freq')
         
+        #TODO 检查数据中是否有col_ts列
         #TODO 若cv_method为TS时给数据按时间顺序排个序
         #TODO 可人工输入训练集和测试集
-        self.train_data, self.test_data = train_test_split(data, test_size=test_size, random_state=0, shuffle=False)
+        self.train_data, self.test_data = train_test_split(data, test_size=test_size, random_state=0, shuffle=split_shuffle)
         self.train_x = self.train_data.loc[:,self.col_x]
         self.train_y = self.train_data.loc[:,self.col_y]
         self.test_x  = self.test_data.loc[:,self.col_x]
@@ -119,6 +120,7 @@ class Regression:
         
         if best_model == 'auto':
             # 通过各模型在训练集上的得分，初始化最佳模型
+            # TODO 检查此处的逻辑 
             self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
         else:
             self.best_model_name = best_model

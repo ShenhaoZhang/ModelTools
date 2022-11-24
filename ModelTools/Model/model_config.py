@@ -13,6 +13,7 @@ preprocess = {
 
 model = {
     'OLS'  : lm.LinearRegression(),
+    'LAR'  : lm.Lars(),
     'HUBER': lm.HuberRegressor(),
     'EN'   : lm.ElasticNetCV(),
     'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
@@ -27,10 +28,11 @@ param = {
 }
 
 base_struct = [
-    'poly_OLS', 'sp_OLS', 'inter_sp_OLS',
-    'poly_std_HUBER', 'inter_sp_std_HUBER',
-    'poly_std_EN', 'inter_sp_std_EN',
-    'poly_std_QR', 'inter_sp_std_QR'
+    'poly_OLS',       'sp_OLS',       'inter_sp_OLS',
+    'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',
+    'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',
+    # 'poly_std_QR',    'sp_std_QR',    'inter_sp_std_QR'
+    'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',
 ]
 
 def struct_to_estimator(struct):
