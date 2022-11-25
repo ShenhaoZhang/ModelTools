@@ -7,6 +7,7 @@ import plotnine as gg
 class DataExplorer:
     
 #TODO 数据清洗 探索性可视化
+#TODO x和y的时序图+xy的散点图
     
     def __init__(self,data:pd.DataFrame) -> None:
         self.data = data 

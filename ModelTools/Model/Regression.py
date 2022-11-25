@@ -25,28 +25,42 @@ if not sys.warnoptions:
 
 class Regression:
     def __init__(self, data:pd.DataFrame, col_x:list, col_y:str, col_ts:str = None, ts_freq = None, 
-                 test_size:float = 0.3, split_shuffle = False, cv_method:str = 'TS', cv_split:int = 5 ) -> None:
+                 split_test_size:float = 0.3, split_shuffle = False, cv_method:str = 'kfold', cv_split:int = 5 ) -> None:
         self.data    = data
         self.col_x   = col_x if isinstance(col_x,list) else [col_x]
         self.col_y   = col_y if isinstance(col_y,str) else col_y[0]
         
+        #TODO col_ts为None时，用行号替代，检查是否可行
+        #TODO 按某个日期来划分数据集
+        if isinstance(self.data,pd.DataFrame):
+            self.split_test_size = split_test_size
+            self.split_shuffle   = split_shuffle
+            self.train_data, self.test_data = train_test_split(data, test_size=split_test_size, random_state=0, shuffle=split_shuffle)
+        elif isinstance(self.data,dict):
+            self.train_data = self.data.get('train')
+            self.test_data = self.data.get('test')
+            if set(self.train_data.columns) != set(self.test_data.columns):
+                raise Exception('训练集和测试集的字段名称不匹配')
+            self.data = pd.concat(list(self.data.values()),axis=0)
+
+        if col_ts is not None:
+            if col_ts not in self.data.columns:
+                raise Exception(f'data中缺失{col_ts}')
+            if ts_freq is None:
+                raise Exception('缺失ts_freq参数')
+            self.data.loc[:,col_ts] = pd.DatetimeIndex(self.data.loc[:,col_ts])
+            self.data = self.data.sort_values(by=col_ts,ascending=True)
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
-        if col_ts is not None and ts_freq is None:
-            raise Exception('Missing ts_freq')
-        
-        #TODO 检查数据中是否有col_ts列
-        #TODO 若cv_method为TS时给数据按时间顺序排个序
-        #TODO 可人工输入训练集和测试集
-        self.train_data, self.test_data = train_test_split(data, test_size=test_size, random_state=0, shuffle=split_shuffle)
+            
         self.train_x = self.train_data.loc[:,self.col_x]
         self.train_y = self.train_data.loc[:,self.col_y]
         self.test_x  = self.test_data.loc[:,self.col_x]
         self.test_y  = self.test_data.loc[:,self.col_y]
         
-        if cv_method == 'TS':
+        if cv_method == 'ts':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
-        elif cv_method == 'KFold':
+        elif cv_method == 'kfold':
             self.cv_method = KFold(n_splits=cv_split, shuffle=True, random_state=0)
         
         self.all_model         = {}  # 每个value都是GridSearchCV对象
@@ -67,7 +81,11 @@ class Regression:
         self.MetricFinal = None
         self.ExpMod      = None  # 基于模型的解释
         self.ExpResid    = None  # 基于测试集残差的解释
-        self.Novelty     = None
+        self.ExpFinal    = None
+        self.Novelty     = None  #TODO 放到Data模块中
+    
+    def split_data(self):
+        return self
         
     @staticmethod   
     def get_model_cv(struct:str,cv,estimator=None,param_grid=None):
@@ -92,9 +110,14 @@ class Regression:
         )
         return search
     
-    def fit(self,add_models:list=None,best_model='auto',print_result=True):
+    def fit(self,base=['lm'],add_models:list=None,best_model:str='auto',best_model_only:bool=False,print_result:bool=True):
+        
+        base_struct = []
+        for s_type in base:
+            base_struct += mc.struct.get(s_type)
+        
         add_models   = [add_models] if (add_models is not None) and (not isinstance(add_models,list)) else add_models
-        model_struct = mc.base_struct if add_models is None else [*mc.base_struct,*add_models]
+        model_struct = base_struct if add_models is None else [*base_struct,*add_models]
         model_struct = list(set(model_struct))
         # TODO 需要增加对add_models的校验
         
@@ -109,14 +132,19 @@ class Regression:
                 param_grid = struct['param_grid']
                 model = self.get_model_cv(estimator=estimator,param_grid=param_grid,cv=self.cv_method)
             
-            if name not in self.all_model.keys():
-                model.fit(X=self.train_data.loc[:,self.col_x], y=self.train_data.loc[:,self.col_y])
-                self.all_model         [name] = model
-                self.all_param         [name] = model.best_params_
-                self.all_cv_results    [name] = model.cv_results_
-                self.all_train_predict [name] = model.predict(self.train_x)
-                self.all_train_score   [name] = model.best_score_
-                self.all_test_predict  [name] = model.predict(self.test_x)
+            if (best_model != 'auto' ) and (best_model_only is True) and (name != best_model):
+                continue
+            
+            if name in self.all_model.keys():
+                continue
+            
+            model.fit(X=self.train_data.loc[:,self.col_x], y=self.train_data.loc[:,self.col_y])
+            self.all_model         [name] = model
+            self.all_param         [name] = model.best_params_
+            self.all_cv_results    [name] = model.cv_results_
+            self.all_train_predict [name] = model.predict(self.train_x)
+            self.all_train_score   [name] = model.best_score_
+            self.all_test_predict  [name] = model.predict(self.test_x)
         
         if best_model == 'auto':
             # 通过各模型在训练集上的得分，初始化最佳模型
@@ -173,13 +201,18 @@ class Regression:
 
         # 打印结果
         if print_result == True:
+            #TODO 打印 train test 的split
             best_model_metric = pd.concat([
                 self.MetricTrain.get_metric().loc[[self.best_model_name]],
                 self.MetricTest.get_metric().loc[[self.best_model_name]]
             ])
             best_model_metric.index = ['Train','Test']
+            best_model_param = ', '.join([f'{param_name}={param_value}' for param_name,param_value in self.best_model_param.items()])
             message = (
-                f"Best_Model(CV) : {self.best_model_name} \n"
+                f"Best Model(CV)   : {self.best_model_name} \n"
+                f"Hyperparameters  : {best_model_param} \n"
+                f"Train Test Split : test_size={self.split_test_size}, shuffle={self.split_shuffle}, random_state=0 \n"
+                f"Cross Validation : {str(self.cv_method)} \n \n"
                 f"{tabulate(best_model_metric.round(4),headers=best_model_metric.columns)} \n \n"
                 "Regression.MetricTrain : 模型在训练集上的效果评价 \n"
                 "Regression.MetricTest  : 模型在测试集上的效果评价 \n"
@@ -187,6 +220,8 @@ class Regression:
                 "Regression.ExpMod      : 基于模型的特征解释 \n"
             )
             print(message)
+        
+        return self
 
     def check_cv_split(self):
         ...
@@ -199,6 +234,7 @@ class Regression:
                 y = np.abs(self.test_y.to_numpy() - self.all_test_predict[self.best_model_name]),
                 geom='point'
             )+gg.geom_smooth(method='lm')
+            +gg.geom_hline(yintercept=self.MetricTrain.get_metric().at[self.best_model_name,'MAE'],color='green')
         )
         return plot
     
@@ -216,6 +252,13 @@ class Regression:
             index       = None if self.col_ts is None else self.data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
         )
+        self.ExpFinal = Explain(
+            model      = self.final_model,
+            model_type = 'regression',
+            data_x     = self.data.loc[:,self.col_x],
+            data_y     = self.data.loc[:,self.col_y].to_numpy()
+        )
+        
         if print_result:
             final_model_matric = self.MetricFinal.get_metric().round(4)
             final_model_matric.index = ['Train & Test']
@@ -225,9 +268,10 @@ class Regression:
             )
             print(message)
     
-    def predict(self):
+    def predict(self,x):
         #TODO 置信区间的预测
-        ...
+        pred = self.final_model.predict(x)
+        return pred
 
 
 if __name__ == '__main__':
@@ -240,5 +284,5 @@ if __name__ == '__main__':
     print(df)
     
     m = Regression(data=df,col_x=['x1','x2'],col_y='y')
-    m.fit()
+    m.fit(best_model='poly_std_EN',best_model_only=True)
     print(m.all_train_score)

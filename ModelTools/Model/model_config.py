@@ -1,6 +1,7 @@
 from sklearn.base import clone
 from sklearn import linear_model as lm
-from sklearn import ensemble as en
+from sklearn import tree
+# from sklearn import ensemble as en
 from sklearn import preprocessing as pr
 from sklearn.pipeline import Pipeline 
 
@@ -17,23 +18,39 @@ model = {
     'HUBER': lm.HuberRegressor(),
     'EN'   : lm.ElasticNetCV(),
     'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
-    'RF'   : en.RandomForestRegressor()
+    'DT'   : tree.DecisionTreeRegressor(),
+    # 'RF'   : en.RandomForestRegressor()
 }
 
 param = {
-    'poly__degree'     : [1,2,3],
-    'inter__degree'    : [1,2,3],
-    'sp__extrapolation': ['constant','continue','linear'],
-    'sp__knots'        : ['uniform','quantile']
+    'poly__degree'      : [1,2,3],
+    'inter__degree'     : [1,2,3],
+    'sp__extrapolation' : ['constant','continue','linear'],
+    'sp__knots'         : ['uniform','quantile'],
+    'DT__max_depth'     : [2,3,4,5], #TODO 待调整
+    # 'RF'               : [''],
 }
 
-base_struct = [
+struct_lm = [
     'poly_OLS',       'sp_OLS',       'inter_sp_OLS',
     'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',
     'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',
     # 'poly_std_QR',    'sp_std_QR',    'inter_sp_std_QR'
     'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',
 ]
+
+struct = {
+    'lm' : [
+        'poly_OLS',       'sp_OLS',       'inter_sp_OLS',
+        'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',
+        'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',
+        # 'poly_std_QR',    'sp_std_QR',    'inter_sp_std_QR'
+        'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',
+    ],
+    'tr' : [
+        'DT'
+    ]
+}
 
 def struct_to_estimator(struct):
     struct = struct.split('_')
