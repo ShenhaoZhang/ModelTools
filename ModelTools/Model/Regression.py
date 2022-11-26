@@ -30,8 +30,7 @@ class Regression:
         self.col_x   = col_x if isinstance(col_x,list) else [col_x]
         self.col_y   = col_y if isinstance(col_y,str) else col_y[0]
         
-        #TODO col_ts为None时，用行号替代，检查是否可行
-        #TODO 按某个日期来划分数据集
+        # 分割数据集
         if isinstance(self.data,pd.DataFrame):
             self.split_test_size = split_test_size
             self.split_shuffle   = split_shuffle
@@ -42,7 +41,12 @@ class Regression:
             if set(self.train_data.columns) != set(self.test_data.columns):
                 raise Exception('训练集和测试集的字段名称不匹配')
             self.data = pd.concat(list(self.data.values()),axis=0)
+        self.train_x = self.train_data.loc[:,self.col_x]
+        self.train_y = self.train_data.loc[:,self.col_y]
+        self.test_x  = self.test_data.loc[:,self.col_x]
+        self.test_y  = self.test_data.loc[:,self.col_y]
 
+        # 定义时间变量
         if col_ts is not None:
             if col_ts not in self.data.columns:
                 raise Exception(f'data中缺失{col_ts}')
@@ -52,12 +56,8 @@ class Regression:
             self.data = self.data.sort_values(by=col_ts,ascending=True)
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
-            
-        self.train_x = self.train_data.loc[:,self.col_x]
-        self.train_y = self.train_data.loc[:,self.col_y]
-        self.test_x  = self.test_data.loc[:,self.col_x]
-        self.test_y  = self.test_data.loc[:,self.col_y]
         
+        # 定义交叉验证的方法
         if cv_method == 'ts':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
         elif cv_method == 'kfold':
@@ -185,6 +185,7 @@ class Regression:
         )
         
         # 解释测试集上的预测误差
+        #TODO 考虑增加样本序号
         abs_resid = np.abs(self.test_y - self.best_model.predict(self.test_x))
         resid_model = clone(self.best_model).fit(self.test_x,abs_resid)
         self.ExpResid = Explain(
@@ -201,7 +202,6 @@ class Regression:
 
         # 打印结果
         if print_result == True:
-            #TODO 打印 train test 的split
             best_model_metric = pd.concat([
                 self.MetricTrain.get_metric().loc[[self.best_model_name]],
                 self.MetricTest.get_metric().loc[[self.best_model_name]]
@@ -223,8 +223,10 @@ class Regression:
         
         return self
 
-    def check_cv_split(self):
+    def check_cv_split(self,plot=True):
+        # TODO 拟合的时间、预测效果、可视化
         ...
+    
     
     def check_novelty(self):
         import plotnine as gg
@@ -267,22 +269,10 @@ class Regression:
                 f"{tabulate(final_model_matric,headers=final_model_matric.columns)}"
             )
             print(message)
+        
+        return self
     
     def predict(self,x):
         #TODO 置信区间的预测
         pred = self.final_model.predict(x)
         return pred
-
-
-if __name__ == '__main__':
-    rng = np.random.default_rng(0)
-    x1 = rng.normal(size=100)
-    x2 = rng.normal(size=100)
-    y = rng.normal(loc=np.sin(x1) + np.cos(x2),scale=1)
-    df = pd.DataFrame(data={'x1':x1,'x2':x2,'y':y})
-    
-    print(df)
-    
-    m = Regression(data=df,col_x=['x1','x2'],col_y='y')
-    m.fit(best_model='poly_std_EN',best_model_only=True)
-    print(m.all_train_score)
