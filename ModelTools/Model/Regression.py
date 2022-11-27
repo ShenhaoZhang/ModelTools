@@ -1,6 +1,7 @@
 import sys 
 import os 
 import warnings
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -13,22 +14,25 @@ from sklearn.model_selection import (
 )
 from tqdm import tqdm
 from tabulate import tabulate
+import altair as alt 
+alt.data_transformers.disable_max_rows()
 
 from . import model_config as mc
-from ..Metric.Metric import Metric
-from ..Explain.Explain import Explain
-from ..tools.Novelty import Novelty
+from ..data.data import Data
+from ..metric.metric import Metric
+from ..explain.explain import Explain
+from ..plot.base_scatter import scatter
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
     os.environ["PYTHONWARNINGS"] = ('ignore::UserWarning,ignore::RuntimeWarning')
 
 class Regression:
-    def __init__(self, data:pd.DataFrame, col_x:list, col_y:str, col_ts:str = None, ts_freq = None, 
+    def __init__(self, data:Union[pd.DataFrame,dict], col_x:Union[str,list], col_y:str, col_ts:str = None, ts_freq = None, 
                  split_test_size:float = 0.3, split_shuffle = False, cv_method:str = 'kfold', cv_split:int = 5 ) -> None:
         self.data    = data
         self.col_x   = col_x if isinstance(col_x,list) else [col_x]
-        self.col_y   = col_y if isinstance(col_y,str) else col_y[0]
+        self.col_y   = col_y 
         
         # 分割数据集
         if isinstance(self.data,pd.DataFrame):
@@ -75,14 +79,19 @@ class Regression:
         self.final_model       = None
         self.final_predict     = None 
         
-        self.Data        = None  # 数据的探索性分析
+        # 数据的探索性分析
+        self.Data = Data(
+            data   = {'train':self.train_data,'test':self.test_data},
+            col_x  = self.col_x,
+            col_y  = self.col_y,
+            col_ts = self.col_ts
+        )  
         self.MetricTrain = None  # 模型在训练集上的效果评价
         self.MetricTest  = None  # 模型在测试集上的效果评价
-        self.MetricFinal = None
+        self.MetricFinal = None  # 最终模型在整个数据集上的效果评价
         self.ExpMod      = None  # 基于模型的解释
         self.ExpResid    = None  # 基于测试集残差的解释
-        self.ExpFinal    = None
-        self.Novelty     = None  #TODO 放到Data模块中
+        self.ExpFinal    = None  # 基于最终模型的解释
     
     def split_data(self):
         return self
@@ -110,7 +119,7 @@ class Regression:
         )
         return search
     
-    def fit(self,base=['lm'],add_models:list=None,best_model:str='auto',best_model_only:bool=False,print_result:bool=True):
+    def fit(self,base=['lm','tr'],add_models:list=None,best_model:str='auto',best_model_only:bool=False,print_result:bool=True):
         
         base_struct = []
         for s_type in base:
@@ -195,11 +204,6 @@ class Regression:
             data_y     = abs_resid
         )
         
-        self.Novelty = Novelty(
-            train_x = self.train_x,
-            test_x  = self.test_x
-        )
-
         # 打印结果
         if print_result == True:
             best_model_metric = pd.concat([
@@ -222,23 +226,6 @@ class Regression:
             print(message)
         
         return self
-
-    def check_cv_split(self,plot=True):
-        # TODO 拟合的时间、预测效果、可视化
-        ...
-    
-    
-    def check_novelty(self):
-        import plotnine as gg
-        plot = (
-            gg.qplot(
-                x = self.Novelty.get_score(),
-                y = np.abs(self.test_y.to_numpy() - self.all_test_predict[self.best_model_name]),
-                geom='point'
-            )+gg.geom_smooth(method='lm')
-            +gg.geom_hline(yintercept=self.MetricTrain.get_metric().at[self.best_model_name,'MAE'],color='green')
-        )
-        return plot
     
     def fit_final_model(self,model='best_model',print_result=True):
         final_model_name = self.best_model_name if model == 'best_model' else model
@@ -276,3 +263,23 @@ class Regression:
         #TODO 置信区间的预测
         pred = self.final_model.predict(x)
         return pred
+
+    def check_cv_split(self,plot=True):
+        # TODO 拟合的时间、预测效果、可视化
+        ...
+    
+    
+    def check_novelty(self):
+        if len(self.all_test_predict)==0:
+            raise Exception('需要先拟合模型')
+        data = pd.DataFrame({
+            'score'       : self.Data.get_novelty_score(),
+            'abs_residual': np.abs(self.test_y.to_numpy() - self.all_test_predict[self.best_model_name])
+        })
+        plot = scatter(
+            data      = data,
+            x         = 'score',
+            y         = 'abs_residual',
+            add_hline = self.MetricTrain.get_metric().at[self.best_model_name,'MAE'],
+        )
+        return plot

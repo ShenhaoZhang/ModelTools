@@ -16,7 +16,7 @@ model = {
     'OLS'  : lm.LinearRegression(),
     'LAR'  : lm.Lars(normalize=False),
     'HUBER': lm.HuberRegressor(),
-    'EN'   : lm.ElasticNetCV(),
+    'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
     'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
     'DT'   : tree.DecisionTreeRegressor(random_state=0),
     'RF'   : en.RandomForestRegressor(random_state=0)

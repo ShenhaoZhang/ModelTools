@@ -6,7 +6,7 @@ from tabulate import tabulate
 
 from . import plot_gg
 from . import plot_alt
-from ..tools.Pca import Pca
+from ..tools.pca import Pca
 
 # warnings.filterwarnings("ignore")
 

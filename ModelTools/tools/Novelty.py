@@ -13,7 +13,7 @@ class Novelty:
         self.score_ci = {}
     
     def get_score(self,method='lof',save=True):
-        score = eval(f'self.score_{method}(self.train_x,self.test_x,{save})')
+        score = eval(f'self._score_{method}(self.train_x,self.test_x,{save})')
         return score
     
     def get_score_CI(self,method='lof',n_bootstrap=1000,alpha=0.05):
@@ -21,15 +21,15 @@ class Novelty:
         score_bootstrap = []
         for i in tqdm(range(n_bootstrap)):
             data = self.train_x.sample(frac=1,replace=True)
-            score = eval(f'self.score_{method}(data,self.test_x,False)')
+            score = eval(f'self._score_{method}(data,self.test_x,False)')
             score_bootstrap.append(score)
-        low = np.quantile(score_bootstrap,q=alpha/2,axis=0)
+        low    = np.quantile(score_bootstrap,q=alpha/2,axis=0)
         median = np.quantile(score_bootstrap,q=0.5,axis=0)
-        high = np.quantile(score_bootstrap,q=1-alpha/2,axis=0)
+        high   = np.quantile(score_bootstrap,q=1-alpha/2,axis=0)
         self.score_ci[method] = {'low':low,'median':median,'high':high}
         return low,median,high
     
-    def score_lof(self,train_x,test_x,save=True):
+    def _score_lof(self,train_x,test_x,save=True):
         clf = LocalOutlierFactor(novelty=True)
         clf.fit(train_x)
         score = clf.score_samples(test_x)
@@ -60,8 +60,9 @@ if __name__ == '__main__':
     print(df_test)
     nov = Novelty(train_x=df_train,test_x=df_test)
     score = nov.get_score(method='lof')
+    print(score)
     
-    low,median,high = nov.get_score_CI()
+    # low,median,high = nov.get_score_CI()
     # plot = (
     #     pd.DataFrame({'score':score,'low':low,'high':high})
     #     .reset_index()
@@ -71,12 +72,12 @@ if __name__ == '__main__':
     #     + gg.geom_line(gg.aes(x='index',y='low'))
     #     + gg.geom_line(gg.aes(x='index',y='high'))
     # )
-    plot = (
-        pd.DataFrame({'score':score,'diff':high-low,
-                      'dist':np.sqrt(df_test.x0**2+df_test.x1**2+df_test.x2**2+df_test.x3**2+df_test.x4**2)})
-        .reset_index()
-        .pipe(gg.ggplot)
-        + gg.aes(x='score',y='dist')
-        + gg.geom_point()
-    )
-    print(plot)
+    # plot = (
+    #     pd.DataFrame({'score':score,'diff':high-low,
+    #                   'dist':np.sqrt(df_test.x0**2+df_test.x1**2+df_test.x2**2+df_test.x3**2+df_test.x4**2)})
+    #     .reset_index()
+    #     .pipe(gg.ggplot)
+    #     + gg.aes(x='score',y='dist')
+    #     + gg.geom_point()
+    # )
+    # print(plot)
