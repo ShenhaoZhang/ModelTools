@@ -21,7 +21,7 @@ from . import model_config as mc
 from ..data.data import Data
 from ..metric.metric import Metric
 from ..explain.explain import Explain
-from ..plot.base_scatter import scatter
+from ..plot.corr import scatter
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")

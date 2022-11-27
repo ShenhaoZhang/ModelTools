@@ -7,6 +7,7 @@ from tabulate import tabulate
 from . import plot_gg
 from . import plot_alt
 from ..tools.pca import Pca
+from ..plot.evo import multi_line
 
 # warnings.filterwarnings("ignore")
 
@@ -233,9 +234,11 @@ class Metric:
                 scales       = scales
             )
         elif engine == 'alt':
-            plot = plot_alt.plot_Pts(
-                data   = plot_data,
-                y_name = self.y_name
+            plot = multi_line(
+                data  = plot_data,
+                x     = 'Time',
+                y     = 'Pred',
+                facet = 'Method'
             )
         return plot
         
@@ -255,8 +258,13 @@ class Metric:
                 scales       = scales
             )
         elif engine == 'alt':
-            # TODO 增加alt图像
-            pass
+            plot = multi_line(
+                data   = plot_data,
+                x      = 'Time',
+                y      = 'Resid',
+                facet  = 'Method',
+                scales = scales
+            )
         return plot
     
     def plot_Rar(self):

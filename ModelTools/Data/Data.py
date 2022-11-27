@@ -4,9 +4,8 @@ from typing import Union
 import numpy as np
 import pandas as pd 
 import plotnine as gg
-import altair as alt
 
-from .plot import ts_scatter
+from ..plot.composite import ts_scatter
 from ..tools.novelty import Novelty
 
 class Data:
