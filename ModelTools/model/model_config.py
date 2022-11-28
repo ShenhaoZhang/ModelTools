@@ -41,10 +41,10 @@ struct_lm = [
 
 struct = {
     'lm' : [
-        'poly_OLS',       'sp_OLS',       'inter_sp_OLS',
-        'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',
-        'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',
-        'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',
+        'OLS',        'poly_OLS',       'sp_OLS',       'inter_sp_OLS',        
+        'std_HUBER',  'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',  
+        'std_EN',     'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',     
+        'std_LAR',    'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',    
     ],
     'tr' : [
         'DT', 'RF'
