@@ -17,7 +17,7 @@ from tabulate import tabulate
 import altair as alt 
 alt.data_transformers.disable_max_rows()
 
-from . import model_config as mc
+from .model_config import RegressionConfig
 from ..data.data import Data
 from ..metric.metric import Metric
 from ..explain.explain import Explain
@@ -61,6 +61,7 @@ class Regression:
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
         
+        self.reg_config = RegressionConfig() # 回归模型管道的配置
         # 定义交叉验证的方法
         if cv_method == 'ts':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
@@ -96,12 +97,11 @@ class Regression:
     def split_data(self):
         return self
         
-    @staticmethod   
-    def get_model_cv(struct:str,cv,estimator=None,param_grid=None):
+    def get_model_cv(self,struct:str,cv,estimator=None,param_grid=None,update_param:dict=None):
         if isinstance(struct,str):
             # 解析模型结构字符
-            estimator  = mc.struct_to_estimator(struct)
-            param_grid = mc.struct_to_param(struct)  
+            estimator  = self.reg_config.struct_to_estimator(struct)
+            param_grid = self.reg_config.struct_to_param(struct,update_param)  
         else:
             estimator  = estimator
             param_grid = param_grid
@@ -119,21 +119,45 @@ class Regression:
         )
         return search
     
-    def fit(self,base=['lm','tr'],add_models:list=None,best_model:str='auto',best_model_only:bool=False,print_result:bool=True):
+    def fit(self, base = ['lm','tr'], best_model:str = 'auto', best_model_only:bool = False, add_models:list = None, update_param:dict = None, 
+            print_result:bool = True):
+        """
+        模型拟合，当第二次调用该方法时，不会重复拟合已拟合的模型
+
+        Parameters
+        ----------
+        base : list, optional
+            基准模型库, by default ['lm','tr']
+        add_models : list, optional
+            在基准模型库中增加模型，有两种定义方式，可混合使用, by default None
+            方法一：库中通过结构化字符的方式定义的模型，例如：'poly_OLS'  
+            方法二：通过字典定义模型的名字、sklearn中的Pipeline和超参数，例如{'name':'OLS','estimator':Pipeline(...),'param_grid':{'poly__degree':[1,2]}}  
+        best_model : str, optional
+            指定最佳模型，训练后的最佳模型为该模型, by default 'auto'
+        best_model_only : bool, optional
+            仅拟合指定的最佳模型, by default False
+        update_param : dict, optional
+            覆盖配置中的某个超参数，字典中的value可以是单个值或列表, by default None
+            例如：{'poly__degree':3} 或 {'poly__degree':[4,5,6]}
+        print_result : bool, optional
+            打印模型结果, by default True
+        """
         
-        base_struct = []
-        for s_type in base:
-            base_struct += mc.struct.get(s_type)
+        model_struct = []
+        for bases_type in base:
+            model_struct += self.reg_config.struct.get(bases_type)
         
-        add_models   = [add_models] if (add_models is not None) and (not isinstance(add_models,list)) else add_models
-        model_struct = base_struct if add_models is None else [*base_struct,*add_models]
-        model_struct = list(set(model_struct))
+        # 在基础模型上增加模型
+        if add_models is not None:
+            add_models = add_models if isinstance(add_models,list) else [add_models]
+            model_struct += add_models
+            model_struct = list(set(model_struct))
         # TODO 需要增加对add_models的校验
         
         for struct in tqdm(model_struct):
             if isinstance(struct,str):
                 name  = struct
-                model = self.get_model_cv(struct=struct,cv=self.cv_method)
+                model = self.get_model_cv(struct=struct,cv=self.cv_method,update_param=update_param)
             elif isinstance(struct,dict):
                 #TODO 此处未测试
                 name       = struct['name']
