@@ -28,10 +28,11 @@ if not sys.warnoptions:
 
 class Regression:
     def __init__(self, data:Union[pd.DataFrame,dict], col_x:Union[str,list], col_y:str, col_ts:str = None, ts_freq = None, 
-                 split_test_size:float = 0.3, split_shuffle = False, cv_method:str = 'kfold', cv_split:int = 5 ) -> None:
-        self.data    = data
-        self.col_x   = col_x if isinstance(col_x,list) else [col_x]
-        self.col_y   = col_y 
+                 split_test_size:float = 0.3, split_shuffle = False, cv_method:str = 'kfold', cv_split:int = 5, exp_model:bool = True) -> None:
+        self.data      = data
+        self.col_x     = col_x if isinstance(col_x,list) else [col_x]
+        self.col_y     = col_y
+        self.exp_model = exp_model
         
         # 分割数据集
         if isinstance(self.data,pd.DataFrame):
@@ -77,7 +78,6 @@ class Regression:
         self.best_model        = None
         self.best_model_param  = None
         self.final_model       = None
-        self.final_predict     = None 
         
         # 数据的探索性分析
         self.Data = Data(
@@ -195,24 +195,25 @@ class Regression:
             highlight   = {self.best_model_name:'Best_Model(CV)'}
         )
         
-        # 解释模型
-        self.ExpMod = Explain(
-            model      = self.best_model,
-            model_type = 'regression',
-            data_x     = self.test_x,
-            data_y     = self.test_y
-        )
-        
-        # 解释测试集上的预测误差
-        #TODO 考虑增加样本序号
-        abs_resid = np.abs(self.test_y - self.best_model.predict(self.test_x))
-        resid_model = clone(self.best_model).fit(self.test_x,abs_resid)
-        self.ExpResid = Explain(
-            model      = resid_model,
-            model_type = 'regression',
-            data_x     = self.test_x,
-            data_y     = abs_resid
-        )
+        if self.exp_model == True:
+            # 解释模型
+            self.ExpMod = Explain(
+                model      = self.best_model,
+                model_type = 'regression',
+                data_x     = self.test_x,
+                data_y     = self.test_y
+            )
+            
+            # 解释测试集上的预测误差
+            #TODO 考虑增加样本序号
+            abs_resid = np.abs(self.test_y - self.best_model.predict(self.test_x))
+            resid_model = clone(self.best_model).fit(self.test_x,abs_resid)
+            self.ExpResid = Explain(
+                model      = resid_model,
+                model_type = 'regression',
+                data_x     = self.test_x,
+                data_y     = abs_resid
+            )
         
         # 打印结果
         if print_result == True:
@@ -241,22 +242,22 @@ class Regression:
         final_model_name = self.best_model_name if model == 'best_model' else model
         self.final_model = clone(self.all_model.get(final_model_name).best_estimator_) # 此处保留了超参数
         self.final_model.fit(X=self.data.loc[:,self.col_x], y=self.data.loc[:,self.col_y].to_numpy())
-        self.final_predict = self.final_model.predict(self.data.loc[:,self.col_x])
         
         # 最终模型在全部数据上的表现
         self.MetricFinal = Metric(
             y_true      = self.data.loc[:,self.col_y].to_numpy(),
-            y_pred      = [self.final_predict],
+            y_pred      = [self.predict()],
             y_pred_name = [final_model_name],
             index       = None if self.col_ts is None else self.data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
         )
-        self.ExpFinal = Explain(
-            model      = self.final_model,
-            model_type = 'regression',
-            data_x     = self.data.loc[:,self.col_x],
-            data_y     = self.data.loc[:,self.col_y].to_numpy()
-        )
+        if self.exp_model == True:
+            self.ExpFinal = Explain(
+                model      = self.final_model,
+                model_type = 'regression',
+                data_x     = self.data.loc[:,self.col_x],
+                data_y     = self.data.loc[:,self.col_y].to_numpy()
+            )
         
         if print_result:
             final_model_matric = self.MetricFinal.get_metric().round(4)
@@ -269,14 +270,36 @@ class Regression:
         
         return self
     
-    def save_final_model(self):
+    def save_final_model(self,path):
         ...
     
-    def predict(self,x):
-        #TODO 置信区间的预测
+    def predict(self,x=None) -> np.ndarray:
+        if self.final_model is None:
+            raise Exception('模型需要先fit_final_model')
+        if x is None:
+            x = self.data.loc[:,self.col_x]
         pred = self.final_model.predict(x)
         return pred
 
+    def predict_ci(self,x:pd.DataFrame=None,n_bootstrap=1000,alpha=0.05) -> dict:
+        if self.final_model is None:
+            raise Exception('模型需要先fit_final_model')
+        if x is None:
+            x = self.data.loc[:,self.col_x]
+        sample = np.empty(shape=[len(x),n_bootstrap])
+        for i in tqdm(range(n_bootstrap)):
+            data = self.data.sample(frac=1,replace=True)
+            mod = clone(self.final_model)
+            mod.fit(X=data.loc[:,self.col_x],y=data.loc[:,self.col_y])
+            sample[:,i] = mod.predict(x)
+        low    = np.quantile(sample,q=alpha/2,axis=1)
+        median = np.quantile(sample,q=0.5,axis=1)
+        high   = np.quantile(sample,q=1-alpha/2,axis=1)
+        result = {'down':low,'median':median,'high':high}
+        return result
+            
+        
+        
     def check_cv_split(self,plot=True):
         # TODO 拟合的时间、预测效果、可视化
         ...

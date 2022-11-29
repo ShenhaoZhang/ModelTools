@@ -56,7 +56,6 @@ class RegressionConfig:
         return preprocess_name,model_name
         
     def struct_to_estimator(self,struct) -> Pipeline:
-        
         preprocess_name, model_name = self.translate_struct(struct)
         pipe = []
         # 在管道中增加预处理的环节
@@ -75,7 +74,6 @@ class RegressionConfig:
 
     def struct_to_param(self,struct) -> dict:
         preprocess_name, model_name = self.translate_struct(struct)
-        
         # 生成参数网格
         # 输入指定超参数空间，替代默认值
         valid_param = {}          
@@ -87,6 +85,8 @@ class RegressionConfig:
 
     def update_param(self,update_param:dict) -> None:
         for param_name,param_space in update_param.items():
+            if param_name not in self.param.keys():
+                raise Exception(f'不存在{param_name}')
             if isinstance(param_space,list):
                 self.param.update({param_name:param_space})
             else:
