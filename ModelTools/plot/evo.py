@@ -8,12 +8,12 @@ import altair as alt
 def line(data:Union[pd.DataFrame,alt.Chart], 
          x:str, 
          y:str, 
-         line_mark={},
-         x_encode={},
-         y_encode={},
-         domain=[],
-         chart = {},
-         plot_size = [600,250]
+         line_mark :dict = {},
+         x_encode  :dict = {},
+         y_encode  :dict = {},
+         domain    :list = alt.Undefined,
+         chart     :dict = {},
+         plot_size :list = [600,250]
     ):
     
     if isinstance(data,pd.DataFrame):
@@ -32,8 +32,8 @@ def line(data:Union[pd.DataFrame,alt.Chart],
 def multi_line(data:pd.DataFrame,
                x:str,
                y:Union[list,str],
-               facet:str=None,
-               scales='fixed',
+               facet :str = None,
+               scales:str = 'fixed',
                **kwargs
             ):
     

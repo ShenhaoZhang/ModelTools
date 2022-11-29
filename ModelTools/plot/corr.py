@@ -46,3 +46,6 @@ def scatter(data:Union[pd.DataFrame,alt.Chart],
             plot += base_chart.mark_line().encode(x=x,y=alt.Y(line_name,type='quantitative'))
         
     return plot
+
+def smooth(data:pd.DataFrame,method='lm'):
+    ...

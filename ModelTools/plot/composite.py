@@ -62,3 +62,6 @@ def ts_scatter(data:pd.DataFrame, x:str, y:str, ts:str = None, add_lm=False) -> 
     plot = alt.hconcat(plot_left,plot_right)
             
     return plot
+
+def multi_line_facet(data:pd.DataFrame):
+    ...

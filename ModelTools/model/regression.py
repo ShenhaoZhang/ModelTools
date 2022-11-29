@@ -9,8 +9,7 @@ from sklearn.base import clone
 from sklearn.model_selection import (
     train_test_split,
     TimeSeriesSplit,
-    KFold,
-    GridSearchCV
+    KFold
 )
 from tqdm import tqdm
 from tabulate import tabulate
@@ -61,7 +60,6 @@ class Regression:
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
         
-        self.reg_config = RegressionConfig() # 回归模型管道的配置
         # 定义交叉验证的方法
         if cv_method == 'ts':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
@@ -71,7 +69,7 @@ class Regression:
         self.all_model         = {}  # 每个value都是GridSearchCV对象
         self.all_param         = {}
         self.all_cv_results    = {}
-        self.all_train_score   = {}  # 该得分将MSE等指标取负值，从而使得该指标越大越好
+        self.all_train_score   = {}  # 该得分将MSE等指标取负值, 从而使得该指标越大越好
         self.all_train_predict = {}
         self.all_test_predict  = {}
         self.best_model_name   = {}
@@ -94,55 +92,33 @@ class Regression:
         self.ExpResid    = None  # 基于测试集残差的解释
         self.ExpFinal    = None  # 基于最终模型的解释
     
-    def split_data(self):
-        return self
-        
-    def get_model_cv(self,struct:str,cv,estimator=None,param_grid=None,update_param:dict=None):
-        if isinstance(struct,str):
-            # 解析模型结构字符
-            estimator  = self.reg_config.struct_to_estimator(struct)
-            param_grid = self.reg_config.struct_to_param(struct,update_param)  
-        else:
-            estimator  = estimator
-            param_grid = param_grid
-            # TODO 输入模型，输出GridSearchCV中可以作为estimator的对象，此处的代码可以是该对象规则的校验
-        
-        # 网格搜索的交叉验证方法
-        search = GridSearchCV(
-            estimator          = estimator,
-            param_grid         = param_grid,
-            refit              = True,
-            cv                 = cv,
-            return_train_score = True,
-            n_jobs             = -1,
-            scoring            = 'neg_mean_squared_error'
-        )
-        return search
-    
     def fit(self, base = ['lm','tr'], best_model:str = 'auto', best_model_only:bool = False, add_models:list = None, update_param:dict = None, 
             print_result:bool = True):
         """
-        模型拟合，当第二次调用该方法时，不会重复拟合已拟合的模型
+        模型拟合, 当第二次调用该方法时, 不会重复拟合已拟合的模型
 
         Parameters
         ----------
         base : list, optional
             基准模型库, by default ['lm','tr']
         add_models : list, optional
-            在基准模型库中增加模型，有两种定义方式，可混合使用, by default None
-            方法一：库中通过结构化字符的方式定义的模型，例如：'poly_OLS'  
-            方法二：通过字典定义模型的名字、sklearn中的Pipeline和超参数，例如{'name':'OLS','estimator':Pipeline(...),'param_grid':{'poly__degree':[1,2]}}  
+            在基准模型库中增加模型, 有两种定义方式, 可混合使用, by default None
+            方法一: 库中通过结构化字符的方式定义的模型, 例如: 'poly_OLS'  
+            方法二: 通过字典定义模型的名字、sklearn中的Pipeline和超参数, 例如{'name':'OLS','estimator':Pipeline(...),'param_grid':{'poly__degree':[1,2]}}  
         best_model : str, optional
-            指定最佳模型，训练后的最佳模型为该模型, by default 'auto'
+            指定最佳模型, 训练后的最佳模型为该模型, by default 'auto'
         best_model_only : bool, optional
             仅拟合指定的最佳模型, by default False
         update_param : dict, optional
-            覆盖配置中的某个超参数，字典中的value可以是单个值或列表, by default None
-            例如：{'poly__degree':3} 或 {'poly__degree':[4,5,6]}
+            覆盖配置中的某个超参数, 字典中的value可以是单个值或列表, by default None
+            例如: {'poly__degree':3} 或 {'poly__degree':[4,5,6]}
         print_result : bool, optional
             打印模型结果, by default True
         """
-        
+        self.reg_config = RegressionConfig() # 回归模型管道的配置
+        if update_param is not None:
+            self.reg_config.update_param(update_param)
+            
         model_struct = []
         for bases_type in base:
             model_struct += self.reg_config.struct.get(bases_type)
@@ -157,13 +133,13 @@ class Regression:
         for struct in tqdm(model_struct):
             if isinstance(struct,str):
                 name  = struct
-                model = self.get_model_cv(struct=struct,cv=self.cv_method,update_param=update_param)
+                model = self.reg_config.get_model_cv(struct=struct,cv_method=self.cv_method)
             elif isinstance(struct,dict):
                 #TODO 此处未测试
                 name       = struct['name']
                 estimator  = struct['estimator']
                 param_grid = struct['param_grid']
-                model = self.get_model_cv(estimator=estimator,param_grid=param_grid,cv=self.cv_method)
+                model = self.reg_config.get_model_cv(estimator=estimator,param_grid=param_grid,cv_method=self.cv_method)
             
             if (best_model != 'auto' ) and (best_model_only is True) and (name != best_model):
                 continue
@@ -180,7 +156,7 @@ class Regression:
             self.all_test_predict  [name] = model.predict(self.test_x)
         
         if best_model == 'auto':
-            # 通过各模型在训练集上的得分，初始化最佳模型
+            # 通过各模型在训练集上的得分, 初始化最佳模型
             # TODO 检查此处的逻辑 
             self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
         else:
@@ -282,6 +258,9 @@ class Regression:
             print(message)
         
         return self
+    
+    def save_final_model(self):
+        ...
     
     def predict(self,x):
         #TODO 置信区间的预测
