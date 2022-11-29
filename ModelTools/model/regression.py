@@ -60,6 +60,7 @@ class Regression:
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
         
+        self.reg_config = RegressionConfig() # 回归模型管道的配置
         # 定义交叉验证的方法
         if cv_method == 'ts':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
@@ -95,7 +96,7 @@ class Regression:
     def fit(self, base = ['lm','tr'], best_model:str = 'auto', best_model_only:bool = False, add_models:list = None, update_param:dict = None, 
             print_result:bool = True):
         """
-        模型拟合, 当第二次调用该方法时, 不会重复拟合已拟合的模型
+        模型拟合
 
         Parameters
         ----------
@@ -115,9 +116,12 @@ class Regression:
         print_result : bool, optional
             打印模型结果, by default True
         """
-        self.reg_config = RegressionConfig() # 回归模型管道的配置
+        if (best_model_only is True) and (best_model == 'auto'):
+            raise Exception('当best_model_only为True时, best_model不能为auto')
+        
         if update_param is not None:
             self.reg_config.update_param(update_param)
+            update_param_name = [param.split('__')[0] for param in update_param.keys()]
             
         model_struct = []
         for bases_type in base:
@@ -131,6 +135,7 @@ class Regression:
         # TODO 需要增加对add_models的校验
         
         for struct in tqdm(model_struct):
+            # 解析字符
             if isinstance(struct,str):
                 name  = struct
                 model = self.reg_config.get_model_cv(struct=struct,cv_method=self.cv_method)
@@ -141,11 +146,16 @@ class Regression:
                 param_grid = struct['param_grid']
                 model = self.reg_config.get_model_cv(estimator=estimator,param_grid=param_grid,cv_method=self.cv_method)
             
-            if (best_model != 'auto' ) and (best_model_only is True) and (name != best_model):
-                continue
-            
-            if name in self.all_model.keys():
-                continue
+            # 判断是否需要重新拟合
+            is_contain_param = any([p_name in name for p_name in update_param_name]) if update_param is not None else False # struct中是否包含了任意一个update_param
+            is_best_model    = name == best_model             # struct是否是指定的最佳模型
+            is_already_fit   = name in self.all_model.keys()  # struct是否已拟合
+            must_refit       = is_contain_param and is_best_model if best_model_only else is_contain_param
+            if not must_refit:
+                if best_model_only and not is_best_model:
+                    continue
+                if is_already_fit:
+                    continue
             
             model.fit(X=self.train_data.loc[:,self.col_x], y=self.train_data.loc[:,self.col_y])
             self.all_model         [name] = model
