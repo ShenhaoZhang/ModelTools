@@ -1,6 +1,7 @@
 import sys 
 import os 
 import warnings
+import pickle
 from typing import Union
 
 import numpy as np
@@ -16,7 +17,7 @@ from tabulate import tabulate
 import altair as alt 
 alt.data_transformers.disable_max_rows()
 
-from .model_config import RegressionConfig
+from .reg_config import RegressionConfig
 from ..data.data import Data
 from ..metric.metric import Metric
 from ..explain.explain import Explain
@@ -45,6 +46,9 @@ class Regression:
             if set(self.train_data.columns) != set(self.test_data.columns):
                 raise Exception('训练集和测试集的字段名称不匹配')
             self.data = pd.concat(list(self.data.values()),axis=0)
+            self.split_test_size = round(len(self.test_data) / len(self.data),2)
+            self.split_shuffle = False
+            
         self.train_x = self.train_data.loc[:,self.col_x]
         self.train_y = self.train_data.loc[:,self.col_y]
         self.test_x  = self.test_data.loc[:,self.col_x]
@@ -61,12 +65,12 @@ class Regression:
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
         
-        self.reg_config = RegressionConfig() # 回归模型管道的配置
         # 定义交叉验证的方法
         if cv_method == 'ts':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
         elif cv_method == 'kfold':
             self.cv_method = KFold(n_splits=cv_split, shuffle=True, random_state=0)
+        self.reg_config = RegressionConfig() # 回归模型管道的配置
         
         self.all_model         = {}  # 每个value都是GridSearchCV对象
         self.all_param         = {}
@@ -78,6 +82,7 @@ class Regression:
         self.best_model        = None
         self.best_model_param  = None
         self.final_model       = None
+        self.final_model_name  = None
         
         # 数据的探索性分析
         self.Data = Data(
@@ -93,7 +98,7 @@ class Regression:
         self.ExpResid    = None  # 基于测试集残差的解释
         self.ExpFinal    = None  # 基于最终模型的解释
     
-    def fit(self, base = ['lm','tr'], best_model:str = 'auto', best_model_only:bool = False, add_models:list = None, update_param:dict = None, 
+    def fit(self, base = ['lm'], best_model:str = 'auto', best_model_only:bool = False, add_models:list = None, update_param:dict = None, 
             print_result:bool = True):
         """
         模型拟合
@@ -101,7 +106,9 @@ class Regression:
         Parameters
         ----------
         base : list, optional
-            基准模型库, by default ['lm','tr']
+            基准模型库, by default ['lm']
+            lm: 线性模型
+            tr: 树模型
         add_models : list, optional
             在基准模型库中增加模型, 有两种定义方式, 可混合使用, by default None
             方法一: 库中通过结构化字符的方式定义的模型, 例如: 'poly_OLS'  
@@ -239,15 +246,15 @@ class Regression:
         return self
     
     def fit_final_model(self,model='best_model',print_result=True):
-        final_model_name = self.best_model_name if model == 'best_model' else model
-        self.final_model = clone(self.all_model.get(final_model_name).best_estimator_) # 此处保留了超参数
+        self.final_model_name = self.best_model_name if model == 'best_model' else model
+        self.final_model = clone(self.all_model.get(self.final_model_name).best_estimator_) # 此处保留了超参数
         self.final_model.fit(X=self.data.loc[:,self.col_x], y=self.data.loc[:,self.col_y].to_numpy())
         
         # 最终模型在全部数据上的表现
         self.MetricFinal = Metric(
             y_true      = self.data.loc[:,self.col_y].to_numpy(),
             y_pred      = [self.predict()],
-            y_pred_name = [final_model_name],
+            y_pred_name = [self.final_model_name],
             index       = None if self.col_ts is None else self.data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
         )
@@ -263,39 +270,50 @@ class Regression:
             final_model_matric = self.MetricFinal.get_metric().round(4)
             final_model_matric.index = ['Train & Test']
             message = (
-                f'Final Model : {final_model_name} \n'
+                f'Final Model : {self.final_model_name} \n'
                 f"{tabulate(final_model_matric,headers=final_model_matric.columns)}"
             )
             print(message)
         
         return self
     
-    def save_final_model(self,path):
-        ...
+    def save_final_model(self,path) -> None:
+        # TODO 更新保存模型的方法
+        # https://scikit-learn.org/stable/model_persistence.html#interoperable-formats
+        self.__check_model_status(type='final')
+        pickle.dump(obj=self.final_model,file=open(path,'wb'))
     
-    def predict(self,x=None) -> np.ndarray:
-        if self.final_model is None:
-            raise Exception('模型需要先fit_final_model')
-        if x is None:
-            x = self.data.loc[:,self.col_x]
-        pred = self.final_model.predict(x)
+    def predict(self,new_data=None) -> np.ndarray:
+        self.__check_model_status(type='final')
+        
+        if new_data is None:
+            new_data = self.data.loc[:,self.col_x]
+        else:
+            new_data = new_data.loc[:,self.col_x]
+            
+        pred = self.final_model.predict(new_data)
         return pred
 
-    def predict_ci(self,x:pd.DataFrame=None,n_bootstrap=1000,alpha=0.05) -> dict:
-        if self.final_model is None:
-            raise Exception('模型需要先fit_final_model')
-        if x is None:
-            x = self.data.loc[:,self.col_x]
-        sample = np.empty(shape=[len(x),n_bootstrap])
+    def predict_ci(self,new_data:pd.DataFrame=None,n_bootstrap=1000,alpha=0.05) -> dict:
+        self.__check_model_status(type='final')
+        
+        if new_data is None:
+            new_data = self.data.loc[:,self.col_x]
+        else:
+            new_data = new_data.loc[:,self.col_x]
+            
+        sample = np.empty(shape=[len(new_data),n_bootstrap])
         for i in tqdm(range(n_bootstrap)):
             data = self.data.sample(frac=1,replace=True)
             mod = clone(self.final_model)
             mod.fit(X=data.loc[:,self.col_x],y=data.loc[:,self.col_y])
-            sample[:,i] = mod.predict(x)
+            sample[:,i] = mod.predict(new_data)
+            
         low    = np.quantile(sample,q=alpha/2,axis=1)
         median = np.quantile(sample,q=0.5,axis=1)
         high   = np.quantile(sample,q=1-alpha/2,axis=1)
         result = {'down':low,'median':median,'high':high}
+        
         return result
             
         
@@ -305,17 +323,48 @@ class Regression:
         ...
     
     
-    def check_novelty(self):
-        if len(self.all_test_predict)==0:
-            raise Exception('需要先拟合模型')
-        data = pd.DataFrame({
-            'score'       : self.Data.get_novelty_score(),
-            'abs_residual': np.abs(self.test_y.to_numpy() - self.all_test_predict[self.best_model_name])
-        })
-        plot = scatter(
-            data      = data,
-            x         = 'score',
-            y         = 'abs_residual',
-            add_hline = self.MetricTrain.get_metric().at[self.best_model_name,'MAE'],
-        )
-        return plot
+    def check_novelty(self,method,new_data=None,return_score=False):
+        #TODO 分两种情况 1. 基于train data 查看 test data  2.基于 all data 查看 new_data
+        if new_data is None:
+            if len(self.all_test_predict)==0:
+                raise Exception('需要先拟合模型')
+            data = pd.DataFrame({
+                'score'       : self.Data.get_novelty_score(method=method),
+                'abs_residual': np.abs(self.test_y.to_numpy() - self.all_test_predict[self.best_model_name])
+            })
+            plot = scatter(
+                data      = data,
+                x         = 'score',
+                y         = 'abs_residual',
+                add_hline = self.MetricTrain.get_metric().at[self.best_model_name,'MAE'],
+            )
+        else:
+            # TODO 调整Novelty
+            from ..tools.novelty import Novelty
+            self.__check_model_status(type='final')
+            score = Novelty(
+                train_x=self.data.loc[:,self.col_x],
+                test_x=new_data.loc[:,self.col_x]
+            ).get_score(method=method)
+            data = pd.DataFrame({
+                'score'       : score,
+                'abs_residual': np.abs(new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x]))
+            })
+            plot = scatter(
+                data      = data,
+                x         = 'score',
+                y         = 'abs_residual',
+                add_hline = self.MetricFinal.get_metric().at[self.final_model_name,'MAE'],
+            )
+        
+        if not return_score:
+            return plot
+        else:
+            return data.score.to_numpy()
+    
+    def __check_model_status(self,type='final'):
+        if type is 'final':
+            if self.final_model is None:
+                raise Exception('模型需要先fit_final_model')
+        # elif type == 'test':
+        #     if self.

@@ -5,6 +5,7 @@ from sklearn.neighbors import LocalOutlierFactor
 from tqdm import tqdm
 
 class Novelty:
+    #TODO 增加可视化分析 ts_scatter
     def __init__(self,train_x:pd.DataFrame,test_x:pd.DataFrame) -> None:
         self.train_x = train_x
         self.test_x = test_x
@@ -37,6 +38,18 @@ class Novelty:
             self.score['lof'] = score
         return score
     
+    def _score_gmm(self,train_x,test_x,save=True):
+        #TODO 单独拿出来，放在model中
+        from sklearn.mixture import GaussianMixture
+        from sklearn.model_selection import GridSearchCV
+
+        cv = GridSearchCV(
+            estimator=GaussianMixture(max_iter=2000,random_state=0),
+            param_grid={'covariance_type':['full','diag'],'n_components':[1,2]}
+        )
+        cv.fit(train_x)
+        return cv.best_estimator_.score_samples(test_x)
+    
 if __name__ == '__main__':
     import numpy as np
     import pandas as pd
@@ -59,10 +72,10 @@ if __name__ == '__main__':
     print(df_train)
     print(df_test)
     nov = Novelty(train_x=df_train,test_x=df_test)
-    score = nov.get_score(method='lof')
+    score = nov.get_score(method='gmm')
     print(score)
     
-    # low,median,high = nov.get_score_CI()
+    # low,median,high = nov.get_score_CI(method='gmm')
     # plot = (
     #     pd.DataFrame({'score':score,'low':low,'high':high})
     #     .reset_index()

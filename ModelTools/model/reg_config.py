@@ -22,8 +22,9 @@ class RegressionConfig:
             'HUBER': lm.HuberRegressor(),
             'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
             'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
+            'BR'   : lm.BayesianRidge(),
             'DT'   : tree.DecisionTreeRegressor(random_state=0),
-            'RF'   : en.RandomForestRegressor(random_state=0)
+            'RF'   : en.RandomForestRegressor(random_state=0),
         }
         
         self.param = {

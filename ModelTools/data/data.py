@@ -26,7 +26,7 @@ class Data:
         self.col_y  = col_y
         self.col_ts = col_ts
         
-    
+    # TODO不应该放在这里
     def get_novelty_score(self,label_train:str='train',label_test:str='test',method='lof'):
         train_x = self.data.loc[self.data._label==label_train,self.col_x]
         test_x  = self.data.loc[self.data._label==label_test,self.col_x]
