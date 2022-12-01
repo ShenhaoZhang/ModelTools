@@ -22,18 +22,20 @@ from ..data.data import Data
 from ..metric.metric import Metric
 from ..explain.explain import Explain
 from ..plot.corr import scatter
+from ..tools.novelty import Novelty
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
     os.environ["PYTHONWARNINGS"] = ('ignore::UserWarning,ignore::RuntimeWarning')
 
 class Regression:
-    def __init__(self, data:Union[pd.DataFrame,dict], col_x:Union[str,list], col_y:str, col_ts:str = None, ts_freq = None, 
-                 split_test_size:float = 0.3, split_shuffle = False, cv_method:str = 'kfold', cv_split:int = 5, exp_model:bool = True) -> None:
+    def __init__(self, data:Union[pd.DataFrame,dict], col_x:Union[str,list], col_y:str, col_ts:str = None, ts_freq:str = None, 
+                 split_test_size:float = 0.3, split_shuffle = False, cv_method:str = 'kfold', cv_split:int = 5, cv_shuffle:bool = False,
+                 exp_model:bool = True) -> None:
         self.data      = data
         self.col_x     = col_x if isinstance(col_x,list) else [col_x]
         self.col_y     = col_y
-        self.exp_model = exp_model
+        self._exp_model = exp_model
         
         # 分割数据集
         if isinstance(self.data,pd.DataFrame):
@@ -43,17 +45,23 @@ class Regression:
         elif isinstance(self.data,dict):
             self.train_data = self.data.get('train')
             self.test_data = self.data.get('test')
+            #TODO 用for循环变量，从而方便看哪个字段缺失
             if set(self.train_data.columns) != set(self.test_data.columns):
                 raise Exception('训练集和测试集的字段名称不匹配')
             self.data = pd.concat(list(self.data.values()),axis=0)
             self.split_test_size = round(len(self.test_data) / len(self.data),2)
             self.split_shuffle = False
-            
+        
+        na_sample = self.data.isna().any(axis=1).sum()
+        if na_sample > 0:
+            self.data = self.data.dropna()
+            print(f'剔除数据中{na_sample}个含缺失值的样本，占总数据量的{round(na_sample/len(self.data),4)*100}%')
+        
         self.train_x = self.train_data.loc[:,self.col_x]
         self.train_y = self.train_data.loc[:,self.col_y]
         self.test_x  = self.test_data.loc[:,self.col_x]
         self.test_y  = self.test_data.loc[:,self.col_y]
-
+        
         # 定义时间变量
         if col_ts is not None:
             if col_ts not in self.data.columns:
@@ -69,7 +77,8 @@ class Regression:
         if cv_method == 'ts':
             self.cv_method = TimeSeriesSplit(n_splits=cv_split)
         elif cv_method == 'kfold':
-            self.cv_method = KFold(n_splits=cv_split, shuffle=True, random_state=0)
+            cv_random_state = 0 if cv_shuffle == True else None
+            self.cv_method = KFold(n_splits=cv_split, shuffle=cv_shuffle, random_state=cv_random_state)
         self.reg_config = RegressionConfig() # 回归模型管道的配置
         
         self.all_model         = {}  # 每个value都是GridSearchCV对象
@@ -78,11 +87,16 @@ class Regression:
         self.all_train_score   = {}  # 该得分将MSE等指标取负值, 从而使得该指标越大越好
         self.all_train_predict = {}
         self.all_test_predict  = {}
-        self.best_model_name   = {}
-        self.best_model        = None
-        self.best_model_param  = None
+        
+        self.best_model            = None
+        self.best_model_name       = None
+        self.best_model_param      = None
+        self.best_model_test_resid = None
+        
         self.final_model       = None
         self.final_model_name  = None
+        self.final_model_param = None
+        self.final_model_resid = None
         
         # 数据的探索性分析
         self.Data = Data(
@@ -94,8 +108,7 @@ class Regression:
         self.MetricTrain = None  # 模型在训练集上的效果评价
         self.MetricTest  = None  # 模型在测试集上的效果评价
         self.MetricFinal = None  # 最终模型在整个数据集上的效果评价
-        self.ExpMod      = None  # 基于模型的解释
-        self.ExpResid    = None  # 基于测试集残差的解释
+        self.ExpTrain    = None  # 基于模型的解释
         self.ExpFinal    = None  # 基于最终模型的解释
     
     def fit(self, base = ['lm'], best_model:str = 'auto', best_model_only:bool = False, add_models:list = None, update_param:dict = None, 
@@ -165,12 +178,15 @@ class Regression:
                     continue
             
             model.fit(X=self.train_data.loc[:,self.col_x], y=self.train_data.loc[:,self.col_y])
-            self.all_model         [name] = model
-            self.all_param         [name] = model.best_params_
-            self.all_cv_results    [name] = model.cv_results_
-            self.all_train_predict [name] = model.predict(self.train_x)
-            self.all_train_score   [name] = model.best_score_
-            self.all_test_predict  [name] = model.predict(self.test_x)
+            # 若模型无效时（预测结果为NaN），不保存模型的结果
+            train_predict = model.predict(self.train_x)
+            if not np.any(np.isnan(train_predict)):
+                self.all_model         [name] = model
+                self.all_param         [name] = model.best_params_
+                self.all_cv_results    [name] = model.cv_results_
+                self.all_train_predict [name] = train_predict
+                self.all_train_score   [name] = model.best_score_
+                self.all_test_predict  [name] = model.predict(self.test_x)
         
         if best_model == 'auto':
             # 通过各模型在训练集上的得分, 初始化最佳模型
@@ -178,9 +194,9 @@ class Regression:
             self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
         else:
             self.best_model_name = best_model
-        self.best_model       = self.all_model.get(self.best_model_name)
-        self.best_model_param = self.all_param.get(self.best_model_name)
-            
+        self.best_model            = self.all_model.get(self.best_model_name)
+        self.best_model_param      = self.all_param.get(self.best_model_name)
+        self.best_model_test_resid = self.test_y.to_numpy() - self.best_model.predict(self.test_x)
         
         # 各个模型在训练集上的效果评估
         self.MetricTrain = Metric(
@@ -202,26 +218,15 @@ class Regression:
             highlight   = {self.best_model_name:'Best_Model(CV)'}
         )
         
-        if self.exp_model == True:
+        if self._exp_model == True:
             # 解释模型
-            self.ExpMod = Explain(
+            self.ExpTrain = Explain(
                 model      = self.best_model,
                 model_type = 'regression',
                 data_x     = self.test_x,
                 data_y     = self.test_y
             )
             
-            # 解释测试集上的预测误差
-            #TODO 考虑增加样本序号
-            abs_resid = np.abs(self.test_y - self.best_model.predict(self.test_x))
-            resid_model = clone(self.best_model).fit(self.test_x,abs_resid)
-            self.ExpResid = Explain(
-                model      = resid_model,
-                model_type = 'regression',
-                data_x     = self.test_x,
-                data_y     = abs_resid
-            )
-        
         # 打印结果
         if print_result == True:
             best_model_metric = pd.concat([
@@ -236,10 +241,6 @@ class Regression:
                 f"Train Test Split : test_size={self.split_test_size}, shuffle={self.split_shuffle}, random_state=0 \n"
                 f"Cross Validation : {str(self.cv_method)} \n \n"
                 f"{tabulate(best_model_metric.round(4),headers=best_model_metric.columns)} \n \n"
-                "Regression.MetricTrain : 模型在训练集上的效果评价 \n"
-                "Regression.MetricTest  : 模型在测试集上的效果评价 \n"
-                "Regression.ExpResid    : 基于模型的残差解释 \n"
-                "Regression.ExpMod      : 基于模型的特征解释 \n"
             )
             print(message)
         
@@ -247,8 +248,13 @@ class Regression:
     
     def fit_final_model(self,model='best_model',print_result=True):
         self.final_model_name = self.best_model_name if model == 'best_model' else model
+        self.final_model_param = self.all_param.get(self.final_model_name)
         self.final_model = clone(self.all_model.get(self.final_model_name).best_estimator_) # 此处保留了超参数
-        self.final_model.fit(X=self.data.loc[:,self.col_x], y=self.data.loc[:,self.col_y].to_numpy())
+        
+        data_x = self.data.loc[:,self.col_x]
+        data_y = self.data.loc[:,self.col_y].to_numpy()
+        self.final_model.fit(X=data_x, y=data_y)
+        self.final_model_resid = data_y - self.final_model.predict(data_x)
         
         # 最终模型在全部数据上的表现
         self.MetricFinal = Metric(
@@ -258,7 +264,7 @@ class Regression:
             index       = None if self.col_ts is None else self.data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
         )
-        if self.exp_model == True:
+        if self._exp_model == True:
             self.ExpFinal = Explain(
                 model      = self.final_model,
                 model_type = 'regression',
@@ -322,49 +328,39 @@ class Regression:
         # TODO 拟合的时间、预测效果、可视化
         ...
     
-    
-    def check_novelty(self,method,new_data=None,return_score=False):
-        #TODO 分两种情况 1. 基于train data 查看 test data  2.基于 all data 查看 new_data
+    #TODO 考虑更改位置
+    def check_novelty(self,method:str='gmm',new_data:pd.DataFrame=None,return_score:bool=False,**kwargs):
+        # 当未输入new_data时，基于train_x检查test_x
         if new_data is None:
-            if len(self.all_test_predict)==0:
-                raise Exception('需要先拟合模型')
-            data = pd.DataFrame({
-                'score'       : self.Data.get_novelty_score(method=method),
-                'abs_residual': np.abs(self.test_y.to_numpy() - self.all_test_predict[self.best_model_name])
-            })
-            plot = scatter(
-                data      = data,
-                x         = 'score',
-                y         = 'abs_residual',
-                add_hline = self.MetricTrain.get_metric().at[self.best_model_name,'MAE'],
-            )
-        else:
-            # TODO 调整Novelty
-            from ..tools.novelty import Novelty
+            self.__check_model_status(type='train')
+            score = Novelty(train_x=self.train_x,test_x=self.test_x).get_score(method=method)
+            resid = np.abs(self.best_model_test_resid)
+            hline_mae = self.MetricTrain.get_metric().at[self.best_model_name,'MAE']
+        
+        # 当输入new_data时，基于整个数据集data检查new_data
+        elif new_data is not None:
             self.__check_model_status(type='final')
-            score = Novelty(
-                train_x=self.data.loc[:,self.col_x],
-                test_x=new_data.loc[:,self.col_x]
-            ).get_score(method=method)
-            data = pd.DataFrame({
-                'score'       : score,
-                'abs_residual': np.abs(new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x]))
-            })
-            plot = scatter(
-                data      = data,
-                x         = 'score',
-                y         = 'abs_residual',
-                add_hline = self.MetricFinal.get_metric().at[self.final_model_name,'MAE'],
-            )
+            score = Novelty(train_x=self.data.loc[:,self.col_x],test_x=new_data.loc[:,self.col_x]).get_score(method=method)
+            resid = np.abs(new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x]))
+            hline_mae = self.MetricFinal.get_metric().at[self.final_model_name,'MAE']
         
         if not return_score:
+            data = pd.DataFrame({'score' : score, 'abs_residual': resid })
+            plot = scatter(
+                data      = data,
+                x         = 'score',
+                y         = 'abs_residual',
+                add_hline = hline_mae,
+                **kwargs
+            )
             return plot
-        else:
-            return data.score.to_numpy()
-    
+        elif return_score:
+            return score
+        
     def __check_model_status(self,type='final'):
-        if type is 'final':
+        if type == 'final':
             if self.final_model is None:
                 raise Exception('模型需要先fit_final_model')
-        # elif type == 'test':
-        #     if self.
+        elif type == 'train':
+            if self.best_model_name is None:
+                raise Exception('模型需要先fit')

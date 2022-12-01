@@ -28,6 +28,8 @@ class Metric:
         for pred in self.y_pred:
             if len(pred) != len(y_true):
                 raise ValueError('WRONG')
+            if np.isnan(pred).any():
+                raise ValueError('WRONG')
         # 预测值名称的长度校验
         self.y_pred_name = y_pred_name if isinstance(y_pred_name,list) else [y_pred_name]
         if (y_pred_name is not None) and (len(self.y_pred) != len(self.y_pred_name)):
