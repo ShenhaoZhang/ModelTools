@@ -61,6 +61,8 @@ class Regression:
         self.train_y = self.train_data.loc[:,self.col_y]
         self.test_x  = self.test_data.loc[:,self.col_x]
         self.test_y  = self.test_data.loc[:,self.col_y]
+        self.data_x  = self.data.loc[:,self.col_x]
+        self.data_y  = self.data.loc[:,self.col_y]
         
         # 定义时间变量
         if col_ts is not None:
@@ -300,26 +302,54 @@ class Regression:
         pred = self.final_model.predict(new_data)
         return pred
 
-    def predict_ci(self,new_data:pd.DataFrame=None,n_bootstrap=1000,alpha=0.05) -> dict:
+    def predict_interval(self,new_data:pd.DataFrame=None,type:str='confidence',n_bootstrap=100,alpha=0.05) -> dict:
         self.__check_model_status(type='final')
         
         if new_data is None:
             new_data = self.data.loc[:,self.col_x]
         else:
             new_data = new_data.loc[:,self.col_x]
+        n_row = new_data.shape[0]
+        if type == 'confidence':    
+            sample = np.empty(shape=[n_row,n_bootstrap])
+            for i in tqdm(range(n_bootstrap)):
+                data = self.data.sample(frac=1,replace=True)
+                mod = clone(self.final_model)
+                mod.fit(X=data.loc[:,self.col_x],y=data.loc[:,self.col_y])
+                sample[:,i] = mod.predict(new_data)
+                
+            low    = np.quantile(sample,q=alpha/2,axis=1)
+            high   = np.quantile(sample,q=1-alpha/2,axis=1)
+            result = {'down':low,'high':high}
             
-        sample = np.empty(shape=[len(new_data),n_bootstrap])
-        for i in tqdm(range(n_bootstrap)):
-            data = self.data.sample(frac=1,replace=True)
-            mod = clone(self.final_model)
-            mod.fit(X=data.loc[:,self.col_x],y=data.loc[:,self.col_y])
-            sample[:,i] = mod.predict(new_data)
+        elif type == 'predict':
+            # 要求数据具有同方差性，因此不能处理heteroscedasticity的问题
+            model = clone(self.final_model)
+            new_data_pred = np.empty([n_row,n_bootstrap])
+            val_resid = []
+            for n in tqdm(range(n_bootstrap)):
+                bs_train_idx = np.random.choice(range(n_row),size=n_row,replace=True)
+                bs_valid_idx = np.array([idx for idx in range(n_row) if idx not in bs_train_idx])
+                model.fit(self.data_x.loc[bs_train_idx,:],self.data_y.loc[bs_train_idx])
+                val_pred = model.predict(self.data_x.loc[bs_valid_idx])
+                val_resid.append(self.data_y.loc[bs_valid_idx]-val_pred)
+                new_data_pred[:,n] = model.predict(new_data)
+            new_data_pred = new_data_pred - new_data_pred.mean(axis=1).reshape(-1,1)
+            val_resid = np.concatenate(val_resid)
+                
+            val_resid = np.percentile(val_resid,q=np.arange(100)) 
+            train_resid = np.percentile(self.final_model_resid,q=np.arange(100))
+            no_info_error = np.mean(np.abs(np.random.permutation(self.data_y) - np.random.permutation(self.predict())))
+            relative_overfit_rate = np.mean(abs(val_resid.mean() - train_resid.mean()) / abs(no_info_error - train_resid.mean()))
+            weight = .632 / (1 - .368 * relative_overfit_rate)
+            residuals = (1-weight) * train_resid + weight * val_resid
             
-        low    = np.quantile(sample,q=alpha/2,axis=1)
-        median = np.quantile(sample,q=0.5,axis=1)
-        high   = np.quantile(sample,q=1-alpha/2,axis=1)
-        result = {'down':low,'median':median,'high':high}
-        
+            C = np.hstack([new_data_pred + o for o in residuals])  
+            pred = self.predict()      
+            low  = np.quantile(C,q=alpha/2,axis=1) + pred
+            high = np.quantile(C,q=1-alpha/2,axis=1) + pred
+            result = {'down':low,'high':high}
+            
         return result
             
         
