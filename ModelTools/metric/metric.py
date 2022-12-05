@@ -16,8 +16,16 @@ class Metric:
     预测效果的评估指标
     """
     
-    def __init__(self, y_true:np.ndarray, y_pred:list, y_pred_name:list = None, y_name = 'y', 
-                 index:pd.DatetimeIndex = None, index_freq:str = None, highlight:dict = None) -> None:
+    def __init__(
+        self, 
+        y_true     : np.ndarray,
+        y_pred     : list,
+        y_pred_name: list             = None,
+        y_name     : str              = 'y',
+        index      : pd.DatetimeIndex = None,
+        index_freq : str              = None,
+        highlight  : dict             = None
+    ) -> None:
         self.y_true    = np.array(y_true)
         self.y_pred    = y_pred if isinstance(y_pred,list) else [y_pred]
         self.y_pred    = [np.array(pred) for pred in self.y_pred]

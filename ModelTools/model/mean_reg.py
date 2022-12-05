@@ -17,7 +17,7 @@ from tabulate import tabulate
 import altair as alt 
 alt.data_transformers.disable_max_rows()
 
-from .reg_config import RegressionConfig
+from .reg_config import MeanRegBuilder
 from ..data.data import Data
 from ..metric.metric import Metric
 from ..explain.explain import Explain
@@ -28,10 +28,22 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
     os.environ["PYTHONWARNINGS"] = ('ignore::UserWarning,ignore::RuntimeWarning')
 
-class Regression:
-    def __init__(self, data:Union[pd.DataFrame,dict], col_x:Union[str,list], col_y:str, col_ts:str = None, ts_freq:str = None, 
-                 split_test_size:float = 0.3, split_shuffle = False, cv_method:str = 'kfold', cv_split:int = 5, cv_shuffle:bool = False,
-                 exp_model:bool = True) -> None:
+class MeanRegression:
+    def __init__(
+        self, 
+        data           :Union[pd.DataFrame,dict], 
+        col_x          :Union[str,list], 
+        col_y          :str, 
+        col_ts         :str   = None,
+        ts_freq        :str   = None,
+        split_test_size:float = 0.3,
+        split_shuffle  :bool  = False,
+        cv_method      :str   = 'kfold',
+        cv_split       :int   = 5,
+        cv_shuffle     :bool  = False,
+        exp_model      :bool  = True
+    ) -> None:
+        
         self.data      = data
         self.col_x     = col_x if isinstance(col_x,list) else [col_x]
         self.col_y     = col_y
@@ -81,7 +93,7 @@ class Regression:
         elif cv_method == 'kfold':
             cv_random_state = 0 if cv_shuffle == True else None
             self.cv_method = KFold(n_splits=cv_split, shuffle=cv_shuffle, random_state=cv_random_state)
-        self.reg_config = RegressionConfig() # 回归模型管道的配置
+        self.mr_builder = MeanRegBuilder() # 回归模型管道的配置
         
         self.all_model         = {}  # 每个value都是GridSearchCV对象
         self.all_param         = {}
@@ -113,8 +125,15 @@ class Regression:
         self.ExpTrain    = None  # 基于模型的解释
         self.ExpFinal    = None  # 基于最终模型的解释
     
-    def fit(self, base = ['lm'], best_model:str = 'auto', best_model_only:bool = False, add_models:list = None, update_param:dict = None, 
-            print_result:bool = True):
+    def fit(
+        self, 
+        base           :list = ['lm'],
+        best_model     :str  = 'auto',
+        best_model_only:bool = False,
+        add_models     :list = None,
+        update_param   :dict = None,
+        print_result   :bool = True
+    ):
         """
         模型拟合
 
@@ -124,17 +143,22 @@ class Regression:
             基准模型库, by default ['lm']
             lm: 线性模型
             tr: 树模型
+            
         add_models : list, optional
             在基准模型库中增加模型, 有两种定义方式, 可混合使用, by default None
             方法一: 库中通过结构化字符的方式定义的模型, 例如: 'poly_OLS'  
             方法二: 通过字典定义模型的名字、sklearn中的Pipeline和超参数, 例如{'name':'OLS','estimator':Pipeline(...),'param_grid':{'poly__degree':[1,2]}}  
+            
         best_model : str, optional
             指定最佳模型, 训练后的最佳模型为该模型, by default 'auto'
+            
         best_model_only : bool, optional
             仅拟合指定的最佳模型, by default False
+            
         update_param : dict, optional
             覆盖配置中的某个超参数, 字典中的value可以是单个值或列表, by default None
             例如: {'poly__degree':3} 或 {'poly__degree':[4,5,6]}
+            
         print_result : bool, optional
             打印模型结果, by default True
         """
@@ -142,12 +166,12 @@ class Regression:
             raise Exception('当best_model_only为True时, best_model不能为auto')
         
         if update_param is not None:
-            self.reg_config.update_param(update_param)
+            self.mr_builder.update_param(update_param)
             update_param_name = [param.split('__')[0] for param in update_param.keys()]
             
         model_struct = []
         for bases_type in base:
-            model_struct += self.reg_config.struct.get(bases_type)
+            model_struct += self.mr_builder.struct.get(bases_type)
         
         # 在基础模型上增加模型
         if add_models is not None:
@@ -160,13 +184,13 @@ class Regression:
             # 解析字符
             if isinstance(struct,str):
                 name  = struct
-                model = self.reg_config.get_model_cv(struct=struct,cv_method=self.cv_method)
+                model = self.mr_builder.get_model_cv(struct=struct,cv_method=self.cv_method)
             elif isinstance(struct,dict):
                 #TODO 此处未测试
                 name       = struct['name']
                 estimator  = struct['estimator']
                 param_grid = struct['param_grid']
-                model = self.reg_config.get_model_cv(estimator=estimator,param_grid=param_grid,cv_method=self.cv_method)
+                model = self.mr_builder.get_model_cv(estimator=estimator,param_grid=param_grid,cv_method=self.cv_method)
             
             # 判断是否需要重新拟合
             is_contain_param = any([p_name in name for p_name in update_param_name]) if update_param is not None else False # struct中是否包含了任意一个update_param

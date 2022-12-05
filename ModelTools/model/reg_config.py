@@ -6,49 +6,14 @@ from sklearn import preprocessing as pr
 from sklearn.pipeline import Pipeline 
 from sklearn.model_selection import GridSearchCV
 
-class RegressionConfig:
+class BaseBuilder:
     def __init__(self) -> None:
-        
-        self.preprocess = {
-            'std'  : pr.StandardScaler(),
-            'poly' : pr.PolynomialFeatures(),
-            'inter': pr.PolynomialFeatures(interaction_only=True),
-            'sp'   : pr.SplineTransformer()
-        }
-        
-        self.model = {
-            'OLS'  : lm.LinearRegression(),
-            'LAR'  : lm.Lars(normalize=False),
-            'HUBER': lm.HuberRegressor(),
-            'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
-            'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
-            'BR'   : lm.BayesianRidge(),
-            'DT'   : tree.DecisionTreeRegressor(random_state=0),
-            'RF'   : en.RandomForestRegressor(random_state=0),
-        }
-        
-        self.param = {
-            'poly__degree'         : [1,2,3],
-            'inter__degree'        : [1,2,3],
-            'sp__extrapolation'    : ['constant','continue','linear'],
-            'sp__knots'            : ['uniform','quantile'],
-            'DT__max_depth'        : [2,4,6,8,10],
-            'DT__min_samples_split': [5,30,90,200],
-            'RF__max_features'     : [1,'sqrt'],
-        }
-        
-        self.struct = {
-            'lm' : [
-                'OLS',        'poly_OLS',       'sp_OLS',       'inter_sp_OLS',        
-                'std_HUBER',  'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',  
-                'std_EN',     'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',     
-                'std_LAR',    'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',    
-            ],
-            'tr' : [
-                'DT', 'RF'
-            ]
-        }
-    
+        self.preprocess = {}
+        self.model = {}
+        self.param = {}
+        self.struct = {}
+        self.cv_score = None
+
     @classmethod
     def translate_struct(cls,struct):
         struct_decomp   = struct.split('_')
@@ -111,10 +76,82 @@ class RegressionConfig:
             cv                 = cv_method,
             return_train_score = True,
             n_jobs             = -1,
-            scoring            = 'neg_mean_squared_error'
+            scoring            = self.cv_score
         )
         return model_cv
 
+
+class MeanRegBuilder(BaseBuilder):
+    def __init__(self) -> None:
+        super().__init__()
+        
+        self.preprocess = {
+            'std'  : pr.StandardScaler(),
+            'poly' : pr.PolynomialFeatures(),
+            'inter': pr.PolynomialFeatures(interaction_only=True),
+            'sp'   : pr.SplineTransformer()
+        }
+        
+        self.model = {
+            'OLS'  : lm.LinearRegression(),
+            'LAR'  : lm.Lars(normalize=False),
+            'HUBER': lm.HuberRegressor(),
+            'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
+            'BR'   : lm.BayesianRidge(),
+            'DT'   : tree.DecisionTreeRegressor(random_state=0),
+            'RF'   : en.RandomForestRegressor(random_state=0),
+        }
+        
+        self.param = {
+            'poly__degree'         : [1,2,3],
+            'inter__degree'        : [1,2,3],
+            'sp__extrapolation'    : ['constant','continue','linear'],
+            'sp__knots'            : ['uniform','quantile'],
+            'DT__max_depth'        : [2,4,6,8,10],
+            'DT__min_samples_split': [5,30,90,200],
+            'RF__max_features'     : [1,'sqrt'],
+        }
+        
+        self.struct = {
+            'lm' : [
+                'OLS',        'poly_OLS',       'sp_OLS',       'inter_sp_OLS',        
+                'std_HUBER',  'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',  
+                'std_EN',     'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',     
+                'std_LAR',    'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',    
+            ],
+            'tr' : [
+                'DT', 'RF'
+            ]
+        }
+        
+        self.cv_score = 'neg_mean_squared_error'
+    
+
+
+class QuantileRegBuilder(BaseBuilder):
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.model = {
+            'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
+        }
+        
+        self.struct = {
+            'lm' : [
+                'QR',        'poly_QR',       'sp_QR',       'inter_sp_QR',        
+            ],
+            # 'tr' : [
+            #     'DT', 'RF'
+            # ]
+        }
+        
+        self.cv_score = 'd2_pinball_score'
+
+
 if __name__ == '__main__':
-    rc = RegressionConfig.translate_struct('poly_OLS')
-    print(rc)
+    mrc = MeanRegBuilder().translate_struct('poly_OLS')
+    print(mrc)
+    
+    qrc = QuantileRegBuilder().translate_struct('poly_QR')
+    print(qrc)
+    
