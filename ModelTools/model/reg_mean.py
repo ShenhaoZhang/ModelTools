@@ -1,3 +1,8 @@
+
+#TODO 增加训练和测试上模型的效果比较
+#TODO 如果工况分布不均匀 且 成块出现，不应split_shuffle为False，这样交叉验证的结果必然不好，应该分组抽样，cv的shuffle也应该分组抽样多特征如何分组？首先PCA？
+#TODO 预测区间和置信区间的可视化
+
 import sys 
 import os 
 import warnings
@@ -27,10 +32,6 @@ from ..tools.novelty import Novelty
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
     os.environ["PYTHONWARNINGS"] = ('ignore::UserWarning,ignore::RuntimeWarning')
-#TODO 增加训练和测试上模型的效果比较
-#TODO 如果工况分布不均匀 且 成块出现，不应split_shuffle为False，这样交叉验证的结果必然不好，应该分组抽样，cv的shuffle也应该分组抽样
-#TODO 预测区间和置信区间的可视化
-# 多特征如何分组？首先PCA？
 
 class MeanRegression:
     def __init__(
@@ -45,12 +46,14 @@ class MeanRegression:
         cv_method      :str   = 'kfold',
         cv_split       :int   = 5,
         cv_shuffle     :bool  = False,
+        cv_score       :str   = 'mse',
         exp_model      :bool  = True
     ) -> None:
         
-        self.data      = data
-        self.col_x     = col_x if isinstance(col_x,list) else [col_x]
-        self.col_y     = col_y
+        self.data       = data
+        self.col_x      = col_x if isinstance(col_x,list) else [col_x]
+        self.col_y      = col_y
+        self.cv_score   = cv_score
         self._exp_model = exp_model
         
         # 分割数据集
@@ -97,7 +100,9 @@ class MeanRegression:
         elif cv_method == 'kfold':
             cv_random_state = 0 if cv_shuffle == True else None
             self.cv_method = KFold(n_splits=cv_split, shuffle=cv_shuffle, random_state=cv_random_state)
-        self.mr_builder = MeanRegBuilder() # 回归模型管道的配置
+        
+        # 配置模型的Pipeline
+        self.mr_builder = MeanRegBuilder(cv_score=self.cv_score) 
         
         self.all_model         = {}  # 每个value都是GridSearchCV对象
         self.all_param         = {}
@@ -132,12 +137,12 @@ class MeanRegression:
     #TODO 当base有误时报错
     def fit(
         self, 
-        base           :list = ['lm'],
-        best_model     :str  = 'auto',
-        best_model_only:bool = False,
-        add_models     :list = None,
-        update_param   :dict = None,
-        print_result   :bool = True
+        base            :Union[str,list] = 'lm',
+        best_model      :str             = 'auto',
+        best_model_only :bool            = False,
+        add_models      :list            = None,
+        update_param    :dict            = None,
+        print_result    :bool            = True
     ):
         """
         模型拟合
@@ -175,7 +180,10 @@ class MeanRegression:
             update_param_name = [param.split('__')[0] for param in update_param.keys()]
             
         model_struct = []
+        base = base if isinstance(base,list) else [base]
         for bases_type in base:
+            if bases_type not in self.mr_builder.struct.keys():
+                raise ValueError(f'base有误: {bases_type}')
             model_struct += self.mr_builder.struct.get(bases_type)
         
         # 在基础模型上增加模型
@@ -221,7 +229,7 @@ class MeanRegression:
         
         if best_model == 'auto':
             # 通过各模型在训练集上的得分, 初始化最佳模型
-            # TODO 检查此处的逻辑 
+            # 此处得分的定义来源于self.cv_score
             self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
         else:
             self.best_model_name = best_model
@@ -267,7 +275,7 @@ class MeanRegression:
             best_model_metric.index = ['Train','Test']
             best_model_param = ', '.join([f'{param_name}={param_value}' for param_name,param_value in self.best_model_param.items()])
             message = (
-                f"Best Model(CV)   : {self.best_model_name} \n"
+                f"Best Model(CV)   : {self.best_model_name} ({self.score_method.upper()}) \n"
                 f"Hyperparameters  : {best_model_param} \n"
                 f"Train Test Split : test_size={self.split_test_size}, shuffle={self.split_shuffle}, random_state=0 \n"
                 f"Cross Validation : {str(self.cv_method)} \n \n"
@@ -333,12 +341,14 @@ class MeanRegression:
 
     def predict_interval(self,new_data:pd.DataFrame=None,type:str='confidence',n_bootstrap=100,alpha=0.05) -> dict:
         self.__check_model_status(type='final')
-        
         if new_data is None:
             new_data = self.data.loc[:,self.col_x]
         else:
             new_data = new_data.loc[:,self.col_x]
         n_row = new_data.shape[0]
+        
+        # 置信区间的估计
+        #TODO 查阅文献改进
         if type == 'confidence':    
             sample = np.empty(shape=[n_row,n_bootstrap])
             for i in tqdm(range(n_bootstrap)):
@@ -346,11 +356,11 @@ class MeanRegression:
                 mod = clone(self.final_model)
                 mod.fit(X=data.loc[:,self.col_x],y=data.loc[:,self.col_y])
                 sample[:,i] = mod.predict(new_data)
-                
             low    = np.quantile(sample,q=alpha/2,axis=1)
             high   = np.quantile(sample,q=1-alpha/2,axis=1)
             result = {'down':low,'high':high}
-            
+        
+        # 预测区间的估计
         elif type == 'predict':
             # 要求数据具有同方差性，因此不能处理heteroscedasticity的问题
             model = clone(self.final_model)
@@ -415,6 +425,9 @@ class MeanRegression:
             return plot
         elif return_score:
             return score
+    
+    def compare_train_test_metric(self):
+        ...
         
     def __check_model_status(self,type='final'):
         if type == 'final':

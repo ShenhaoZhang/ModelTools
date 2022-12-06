@@ -5,17 +5,28 @@ from sklearn import linear_model as lm
 from sklearn import tree
 from sklearn import ensemble as en
 from sklearn import preprocessing as pr
+from sklearn import metrics
 
 #TODO 检查如何能按工况进行分组抽样
-#TODO 可选损失函数
 
 class BaseBuilder:
-    def __init__(self) -> None:
-        self.preprocess = {}
-        self.model = {}
-        self.param = {}
-        self.struct = {}
-        self.cv_score = None
+    def __init__(self,cv_score:str) -> None:
+
+        self.preprocess = None
+        self.param      = None
+        self.model      = None
+        self.struct     = None
+        self.cv_score   = cv_score
+    
+    @staticmethod
+    def get_score(score_name):
+        score = {
+            'mse' : metrics.get_scorer('neg_mean_squared_error'),  
+            'mae' : metrics.get_scorer('neg_mean_absolute_error'),
+            'mdae': metrics.get_scorer('neg_median_absolute_error'),
+            'mape': metrics.get_scorer('neg_mean_absolute_percentage_error')
+        }
+        return score.get(score_name)
 
     @classmethod
     def translate_struct(cls,struct):
@@ -79,30 +90,21 @@ class BaseBuilder:
             cv                 = cv_method,
             return_train_score = True,
             n_jobs             = -1,
-            scoring            = self.cv_score
+            scoring            = self.get_score(score_name=self.cv_score)
         )
         return model_cv
+    
 
 
 class MeanRegBuilder(BaseBuilder):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, cv_score='mse') -> None:
+        super().__init__(cv_score)
         
         self.preprocess = {
             'std'  : pr.StandardScaler(),
             'poly' : pr.PolynomialFeatures(),
             'inter': pr.PolynomialFeatures(interaction_only=True),
             'sp'   : pr.SplineTransformer()
-        }
-        
-        self.model = {
-            'OLS'  : lm.LinearRegression(), #TODO 线性模型没有拟合截距项
-            'LAR'  : lm.Lars(normalize=False),
-            'HUBER': lm.HuberRegressor(),
-            'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
-            'BR'   : lm.BayesianRidge(),
-            'DT'   : tree.DecisionTreeRegressor(random_state=0),
-            'RF'   : en.RandomForestRegressor(random_state=0),
         }
         
         self.param = {
@@ -113,6 +115,17 @@ class MeanRegBuilder(BaseBuilder):
             'DT__max_depth'        : [2,4,6,8,10],
             'DT__min_samples_split': [5,30,90,200],
             'RF__max_features'     : [1,'sqrt'],
+        }
+
+        self.model = {
+            'OLS'  : lm.LinearRegression(), 
+            'LAR'  : lm.Lars(normalize=False),
+            'HUBER': lm.HuberRegressor(),
+            'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
+            # 'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),  #TODO 条件alpha
+            'BR'   : lm.BayesianRidge(),
+            'DT'   : tree.DecisionTreeRegressor(random_state=0),
+            'RF'   : en.RandomForestRegressor(random_state=0),
         }
         
         self.struct = {
@@ -127,12 +140,11 @@ class MeanRegBuilder(BaseBuilder):
             ]
         }
         
-        self.cv_score = 'neg_mean_squared_error'
-    
-
+        self.cv_score = cv_score
+        
 class QuantileRegBuilder(BaseBuilder):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self,cv_score) -> None:
+        super().__init__(cv_score)
 
         self.model = {
             'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
@@ -148,12 +160,13 @@ class QuantileRegBuilder(BaseBuilder):
         }
         
         self.cv_score = 'd2_pinball_score'
+        
 
 
 if __name__ == '__main__':
     mrc = MeanRegBuilder().translate_struct('poly_OLS')
     print(mrc)
     
-    qrc = QuantileRegBuilder().translate_struct('poly_QR')
-    print(qrc)
+    # qrc = QuantileRegBuilder().translate_struct('poly_QR')
+    # print(qrc)
     
