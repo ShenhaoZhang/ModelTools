@@ -27,6 +27,10 @@ from ..tools.novelty import Novelty
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
     os.environ["PYTHONWARNINGS"] = ('ignore::UserWarning,ignore::RuntimeWarning')
+#TODO 增加训练和测试上模型的效果比较
+#TODO 如果工况分布不均匀 且 成块出现，不应split_shuffle为False，这样交叉验证的结果必然不好，应该分组抽样，cv的shuffle也应该分组抽样
+#TODO 预测区间和置信区间的可视化
+# 多特征如何分组？首先PCA？
 
 class MeanRegression:
     def __init__(
@@ -125,6 +129,7 @@ class MeanRegression:
         self.ExpTrain    = None  # 基于模型的解释
         self.ExpFinal    = None  # 基于最终模型的解释
     
+    #TODO 当base有误时报错
     def fit(
         self, 
         base           :list = ['lm'],

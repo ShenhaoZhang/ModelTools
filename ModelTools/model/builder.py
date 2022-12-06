@@ -6,6 +6,9 @@ from sklearn import tree
 from sklearn import ensemble as en
 from sklearn import preprocessing as pr
 
+#TODO 检查如何能按工况进行分组抽样
+#TODO 可选损失函数
+
 class BaseBuilder:
     def __init__(self) -> None:
         self.preprocess = {}
