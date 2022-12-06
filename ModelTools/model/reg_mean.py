@@ -17,7 +17,7 @@ from tabulate import tabulate
 import altair as alt 
 alt.data_transformers.disable_max_rows()
 
-from .reg_config import MeanRegBuilder
+from .builder import MeanRegBuilder
 from ..data.data import Data
 from ..metric.metric import Metric
 from ..explain.explain import Explain

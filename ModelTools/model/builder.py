@@ -1,10 +1,10 @@
 from sklearn.base import clone
+from sklearn.pipeline import Pipeline 
+from sklearn.model_selection import GridSearchCV
 from sklearn import linear_model as lm
 from sklearn import tree
 from sklearn import ensemble as en
 from sklearn import preprocessing as pr
-from sklearn.pipeline import Pipeline 
-from sklearn.model_selection import GridSearchCV
 
 class BaseBuilder:
     def __init__(self) -> None:
@@ -93,7 +93,7 @@ class MeanRegBuilder(BaseBuilder):
         }
         
         self.model = {
-            'OLS'  : lm.LinearRegression(),
+            'OLS'  : lm.LinearRegression(), #TODO 线性模型没有拟合截距项
             'LAR'  : lm.Lars(normalize=False),
             'HUBER': lm.HuberRegressor(),
             'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
@@ -126,7 +126,6 @@ class MeanRegBuilder(BaseBuilder):
         
         self.cv_score = 'neg_mean_squared_error'
     
-
 
 class QuantileRegBuilder(BaseBuilder):
     def __init__(self) -> None:
