@@ -1,6 +1,10 @@
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline 
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import (
+    GridSearchCV,
+    TimeSeriesSplit,
+    KFold
+)
 from sklearn import linear_model as lm
 from sklearn import tree
 from sklearn import ensemble as en
@@ -10,23 +14,45 @@ from sklearn import metrics
 #TODO 检查如何能按工况进行分组抽样
 
 class BaseBuilder:
-    def __init__(self,cv_score:str) -> None:
+    def __init__(
+        self,
+        cv_method,
+        cv_split,
+        cv_shuffle,
+        cv_score:str,
+    ) -> None:
 
+        self.cv_method  = cv_method
+        self.cv_split   = cv_split
+        self.cv_shuffle = cv_shuffle
+        self.cv_score   = cv_score
         self.preprocess = None
         self.param      = None
         self.model      = None
         self.struct     = None
-        self.cv_score   = cv_score
+        
+        self.cv         = None
+        self.score      = None
     
     @staticmethod
-    def get_score(score_name):
+    def get_cv(cv_method,cv_split,cv_shuffle):
+        if cv_method == 'ts':
+            cv = TimeSeriesSplit(n_splits=cv_split)
+        elif cv_method == 'kfold':
+            cv_random_state = 0 if cv_shuffle == True else None
+            cv = KFold(n_splits=cv_split,shuffle=cv_shuffle,random_state=cv_random_state)
+        return cv 
+    
+    @staticmethod
+    def get_cv_score(score_name):
         score = {
             'mse' : metrics.get_scorer('neg_mean_squared_error'),  
             'mae' : metrics.get_scorer('neg_mean_absolute_error'),
             'mdae': metrics.get_scorer('neg_median_absolute_error'),
             'mape': metrics.get_scorer('neg_mean_absolute_percentage_error')
         }
-        return score.get(score_name)
+        score = score.get(score_name)
+        return score
 
     @classmethod
     def translate_struct(cls,struct):
@@ -72,7 +98,7 @@ class BaseBuilder:
             else:
                 self.param.update({param_name:[param_space]})
     
-    def get_model_cv(self,cv_method,struct:str=None,estimator=None,param_grid=None):
+    def get_model_cv(self,struct:str=None,estimator=None,param_grid=None):
         if struct is not None:
             estimator = self.struct_to_estimator(struct)
             param_grid = self.struct_to_param(struct)
@@ -83,22 +109,26 @@ class BaseBuilder:
         else:
             raise Exception('必须输入cv_method或estimator和param_grid')
         
+        self.cv = self.get_cv(self.cv_method,self.cv_split,self.cv_shuffle)
+        self.score = self.get_cv_score(self.cv_score)
+        
         model_cv = GridSearchCV(
             estimator          = estimator,
             param_grid         = param_grid,
             refit              = True,
-            cv                 = cv_method,
+            cv                 = self.cv,
             return_train_score = True,
             n_jobs             = -1,
-            scoring            = self.get_score(score_name=self.cv_score)
+            scoring            = self.score
         )
         return model_cv
     
 
 
 class MeanRegBuilder(BaseBuilder):
-    def __init__(self, cv_score='mse') -> None:
-        super().__init__(cv_score)
+    
+    def __init__(self, cv_method, cv_split, cv_shuffle, cv_score:str = 'mse') -> None:
+        super().__init__(cv_method, cv_split, cv_shuffle, cv_score)
         
         self.preprocess = {
             'std'  : pr.StandardScaler(),

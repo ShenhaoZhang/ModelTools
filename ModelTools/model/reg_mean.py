@@ -12,11 +12,7 @@ from typing import Union
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
-from sklearn.model_selection import (
-    train_test_split,
-    TimeSeriesSplit,
-    KFold
-)
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from tabulate import tabulate
 import altair as alt 
@@ -53,6 +49,9 @@ class MeanRegression:
         self.data       = data
         self.col_x      = col_x if isinstance(col_x,list) else [col_x]
         self.col_y      = col_y
+        self.cv_method  = cv_method
+        self.cv_split   = cv_split
+        self.cv_shuffle = cv_shuffle
         self.cv_score   = cv_score
         self._exp_model = exp_model
         
@@ -94,15 +93,13 @@ class MeanRegression:
         self.col_ts  = col_ts
         self.ts_freq = ts_freq
         
-        # 定义交叉验证的方法
-        if cv_method == 'ts':
-            self.cv_method = TimeSeriesSplit(n_splits=cv_split)
-        elif cv_method == 'kfold':
-            cv_random_state = 0 if cv_shuffle == True else None
-            self.cv_method = KFold(n_splits=cv_split, shuffle=cv_shuffle, random_state=cv_random_state)
-        
         # 配置模型的Pipeline
-        self.mr_builder = MeanRegBuilder(cv_score=self.cv_score) 
+        self.mr_builder = MeanRegBuilder(
+            cv_score   = self.cv_score,
+            cv_method  = self.cv_method,
+            cv_shuffle = self.cv_shuffle,
+            cv_split   = self.cv_split
+        ) 
         
         self.all_model         = {}  # 每个value都是GridSearchCV对象
         self.all_param         = {}
@@ -197,13 +194,13 @@ class MeanRegression:
             # 解析字符
             if isinstance(struct,str):
                 name  = struct
-                model = self.mr_builder.get_model_cv(struct=struct,cv_method=self.cv_method)
+                model = self.mr_builder.get_model_cv(struct=struct)
             elif isinstance(struct,dict):
                 #TODO 此处未测试
                 name       = struct['name']
                 estimator  = struct['estimator']
                 param_grid = struct['param_grid']
-                model = self.mr_builder.get_model_cv(estimator=estimator,param_grid=param_grid,cv_method=self.cv_method)
+                model = self.mr_builder.get_model_cv(estimator=estimator,param_grid=param_grid)
             
             # 判断是否需要重新拟合
             is_contain_param = any([p_name in name for p_name in update_param_name]) if update_param is not None else False # struct中是否包含了任意一个update_param
@@ -275,10 +272,10 @@ class MeanRegression:
             best_model_metric.index = ['Train','Test']
             best_model_param = ', '.join([f'{param_name}={param_value}' for param_name,param_value in self.best_model_param.items()])
             message = (
-                f"Best Model(CV)   : {self.best_model_name} ({self.score_method.upper()}) \n"
+                f"Best Model(CV)   : {self.best_model_name} ({self.cv_score.upper()}) \n"
                 f"Hyperparameters  : {best_model_param} \n"
                 f"Train Test Split : test_size={self.split_test_size}, shuffle={self.split_shuffle}, random_state=0 \n"
-                f"Cross Validation : {str(self.cv_method)} \n \n"
+                f"Cross Validation : {str(self.mr_builder.cv)} \n \n"
                 f"{tabulate(best_model_metric.round(4),headers=best_model_metric.columns)} \n \n"
             )
             print(message)
