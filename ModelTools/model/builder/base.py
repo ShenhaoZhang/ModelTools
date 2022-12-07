@@ -26,13 +26,14 @@ class BaseBuilder:
         self.cv_split   = cv_split
         self.cv_shuffle = cv_shuffle
         self.cv_score   = cv_score
+
         self.preprocess = None
         self.param      = None
         self.model      = None
         self.struct     = None
         
-        self.cv         = None
-        self.score      = None
+        self.cv    = self.get_cv(self.cv_method,self.cv_split,self.cv_shuffle)
+        self.score = self.get_cv_score(self.cv_score)
     
     @staticmethod
     def get_cv(cv_method,cv_split,cv_shuffle):
@@ -45,12 +46,7 @@ class BaseBuilder:
     
     @staticmethod
     def get_cv_score(score_name):
-        score = {
-            'mse' : metrics.get_scorer('neg_mean_squared_error'),  
-            'mae' : metrics.get_scorer('neg_mean_absolute_error'),
-            'mdae': metrics.get_scorer('neg_median_absolute_error'),
-            'mape': metrics.get_scorer('neg_mean_absolute_percentage_error')
-        }
+        score = {}
         score = score.get(score_name)
         return score
 
@@ -85,7 +81,7 @@ class BaseBuilder:
         valid_param = {}          
         for param_name,param_space in self.param.items():
             param_method_name = param_name.split('__')[0]
-            if param_method_name in preprocess_name or param_method_name in model_name:
+            if param_method_name in preprocess_name or param_method_name == model_name:
                 valid_param[param_name] = param_space
         return valid_param
 
@@ -109,9 +105,6 @@ class BaseBuilder:
         else:
             raise Exception('必须输入cv_method或estimator和param_grid')
         
-        self.cv = self.get_cv(self.cv_method,self.cv_split,self.cv_shuffle)
-        self.score = self.get_cv_score(self.cv_score)
-        
         model_cv = GridSearchCV(
             estimator          = estimator,
             param_grid         = param_grid,
@@ -125,78 +118,5 @@ class BaseBuilder:
     
 
 
-class MeanRegBuilder(BaseBuilder):
-    
-    def __init__(self, cv_method, cv_split, cv_shuffle, cv_score:str = 'mse') -> None:
-        super().__init__(cv_method, cv_split, cv_shuffle, cv_score)
-        
-        self.preprocess = {
-            'std'  : pr.StandardScaler(),
-            'poly' : pr.PolynomialFeatures(),
-            'inter': pr.PolynomialFeatures(interaction_only=True),
-            'sp'   : pr.SplineTransformer()
-        }
-        
-        self.param = {
-            'poly__degree'         : [1,2,3],
-            'inter__degree'        : [1,2,3],
-            'sp__extrapolation'    : ['constant','continue','linear'],
-            'sp__knots'            : ['uniform','quantile'],
-            'DT__max_depth'        : [2,4,6,8,10],
-            'DT__min_samples_split': [5,30,90,200],
-            'RF__max_features'     : [1,'sqrt'],
-        }
 
-        self.model = {
-            'OLS'  : lm.LinearRegression(), 
-            'LAR'  : lm.Lars(normalize=False),
-            'HUBER': lm.HuberRegressor(),
-            'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
-            # 'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),  #TODO 条件alpha
-            'BR'   : lm.BayesianRidge(),
-            'DT'   : tree.DecisionTreeRegressor(random_state=0),
-            'RF'   : en.RandomForestRegressor(random_state=0),
-        }
         
-        self.struct = {
-            'lm' : [
-                'OLS',        'poly_OLS',       'sp_OLS',       'inter_sp_OLS',        
-                'std_HUBER',  'poly_std_HUBER', 'sp_std_HUBER', 'inter_sp_std_HUBER',  
-                'std_EN',     'poly_std_EN',    'sp_std_EN',    'inter_sp_std_EN',     
-                'std_LAR',    'poly_std_LAR',   'sp_std_LAR',   'inter_sp_std_LAR',    
-            ],
-            'tr' : [
-                'DT', 'RF'
-            ]
-        }
-        
-        self.cv_score = cv_score
-        
-class QuantileRegBuilder(BaseBuilder):
-    def __init__(self,cv_score) -> None:
-        super().__init__(cv_score)
-
-        self.model = {
-            'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),
-        }
-        
-        self.struct = {
-            'lm' : [
-                'QR',        'poly_QR',       'sp_QR',       'inter_sp_QR',        
-            ],
-            # 'tr' : [
-            #     'DT', 'RF'
-            # ]
-        }
-        
-        self.cv_score = 'd2_pinball_score'
-        
-
-
-if __name__ == '__main__':
-    mrc = MeanRegBuilder().translate_struct('poly_OLS')
-    print(mrc)
-    
-    # qrc = QuantileRegBuilder().translate_struct('poly_QR')
-    # print(qrc)
-    
