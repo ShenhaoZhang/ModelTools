@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from . import plot_alt
+from ..plot import plot_alt
 from ..tools.pca import Pca
 
 # warnings.filterwarnings("ignore")
@@ -67,29 +67,40 @@ class BaseMetric:
             top_metric = (
                 self.get_metric()
                 .drop(list(self.highlight.keys()))
-                .sort_values(by='MSE')
+                # .sort_values(by='MSE')
                 .head(top_metric_count)
                 .index.to_list()
             )
             self.focus = list(self.highlight.keys()) + top_metric
         
         self.data = None
+        self._init_outlier()
         self._init_data()
         
     def _init_outlier(self):
         pass
         
-    def _init_data(self):
+    def _init_data(self,contain_resid=True):
         
-        self._init_outlier()
+        data      = [self.index, self.y_true, *self.y_pred]
+        index     = ['Time',f'True_{self.y_name}', *self.y_pred_name]
+        stubnames = ['Pred']
+        if contain_resid:
+            data      += [*self.resid, *self.outlier_index]
+            index     += [*self.resid_name, *self.outlier_name]
+            stubnames += ['Resid','Outlier']
         
         self.data = (
-            pd.DataFrame(
-                data=[self.index, self.y_true, *self.y_pred, *self.resid, *self.outlier_index],
-                index=['Time',f'True_{self.y_name}', *self.y_pred_name, *self.resid_name, *self.outlier_name]
-            )
+            pd.DataFrame(data = data,index = index)
             .T
-            .pipe(pd.wide_to_long,stubnames=['Pred','Resid','Outlier'],i='Time',j='Method',suffix='\w+',sep='_')
+            .pipe(
+                pd.wide_to_long,
+                stubnames = stubnames,
+                i         = 'Time',
+                j         = 'Method',
+                suffix    = '\w+',
+                sep       = '_'
+            )
             .reset_index()
             .infer_objects()
             .assign(Highlight = lambda dt:dt.Method.map(self.highlight))

@@ -118,7 +118,7 @@ class BaseModel:
         ) 
     
     #TODO 考虑放到fit中
-    def _init_model(self,Builder,Metric):
+    def _init_model(self,Builder,Metric,metric_kwargs:dict=None):
         # 配置模型的Pipeline
         self._builder = Builder(
             cv_score   = self.cv_score,
@@ -128,6 +128,7 @@ class BaseModel:
         ) 
         
         self._metric = Metric
+        self._metric_kwargs = metric_kwargs if metric_kwargs is not None else {}
         
     def fit(
         self, 
@@ -238,7 +239,8 @@ class BaseModel:
             y_pred_name = list(self.all_train_predict.keys()),
             index       = None if self.col_ts is None else self.train_data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
-            highlight   = {self.best_model_name:'Best_Model(CV)'}
+            highlight   = {self.best_model_name:'Best_Model(CV)'},
+            **self._metric_kwargs
         )
         
         # 各个模型在测试集上的效果评估
@@ -248,7 +250,8 @@ class BaseModel:
             y_pred_name = list(self.all_test_predict.keys()),
             index       = None if self.col_ts is None else self.test_data.loc[:,self.col_ts],
             index_freq  = self.ts_freq, 
-            highlight   = {self.best_model_name:'Best_Model(CV)'}
+            highlight   = {self.best_model_name:'Best_Model(CV)'},
+            **self._metric_kwargs
         )
         
         if self._exp_model == True:
@@ -268,6 +271,7 @@ class BaseModel:
                 self.MetricTest.get_metric().loc[[self.best_model_name]]
             ])
             best_model_metric.index = ['Train','Test']
+            #TODO 去掉前缀
             best_model_param = ', '.join([f'{param_name}={param_value}' for param_name,param_value in self.best_model_param.items()])
             message = (
                 f"Best Model(CV)   : {self.best_model_name} ({self.cv_score.upper()}) \n"
@@ -296,7 +300,8 @@ class BaseModel:
             y_pred      = [self.predict()],
             y_pred_name = [self.final_model_name],
             index       = None if self.col_ts is None else self.data.loc[:,self.col_ts],
-            index_freq  = self.ts_freq, 
+            index_freq  = self.ts_freq,
+            **self._metric_kwargs
         )
         if self._exp_model == True:
             self.ExpFinal = Explain(

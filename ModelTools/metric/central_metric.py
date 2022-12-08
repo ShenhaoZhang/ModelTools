@@ -33,6 +33,9 @@ class CentralMetric(BaseMetric):
         self.outlier_count = [np.sum(self.outlier_index[i]) for i in range(self.y_pred_n)]
         self.outlier_pct   = [np.round(self.outlier_count[i] / self.sample_n,4) for i in range(self.y_pred_n)]
         
+    def _init_data(self):
+        super()._init_data(contain_resid=True)
+        
     def get_metric(self,type='eval',add_highlight_col=False):
         
         if type == 'eval':

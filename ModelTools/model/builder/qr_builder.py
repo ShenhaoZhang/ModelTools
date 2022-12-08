@@ -27,7 +27,7 @@ class QuantileRegBuilder(BaseBuilder):
             'sp'   : pr.SplineTransformer()
         }
         self.param = {
-            'poly__degree'         : [1,2,3],
+            'poly__degree'         : [2,3,4],
             'inter__degree'        : [1,2,3],
             'sp__extrapolation'    : ['constant','continue','linear'],
             'sp__knots'            : ['uniform','quantile'],

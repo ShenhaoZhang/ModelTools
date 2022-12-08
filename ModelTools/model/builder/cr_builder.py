@@ -7,7 +7,7 @@ from sklearn import preprocessing as pr
 from ._base import BaseBuilder
 
 
-class MeanRegBuilder(BaseBuilder):
+class CentralRegBuilder(BaseBuilder):
     
     def __init__(self, cv_method, cv_split, cv_shuffle, cv_score:str = 'mse') -> None:
         super().__init__(cv_method, cv_split, cv_shuffle, cv_score)
@@ -19,7 +19,7 @@ class MeanRegBuilder(BaseBuilder):
             'sp'   : pr.SplineTransformer()
         }
         self.param = {
-            'poly__degree'         : [1,2,3],
+            'poly__degree'         : [2,3,4],
             'inter__degree'        : [1,2,3],
             'sp__extrapolation'    : ['constant','continue','linear'],
             'sp__knots'            : ['uniform','quantile'],
