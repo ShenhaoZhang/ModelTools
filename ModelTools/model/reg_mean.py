@@ -12,8 +12,9 @@ import pandas as pd
 import altair as alt 
 alt.data_transformers.disable_max_rows()
 
-from .base import BaseModel
+from ._base import BaseModel
 from .builder.rm_builder import MeanRegBuilder
+from ..metric.central_metric import CentralMetric
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
@@ -22,19 +23,19 @@ if not sys.warnoptions:
 class MeanRegression(BaseModel):
     def __init__(
         self, 
-        data: Union[pd.DataFrame, dict], 
-        col_x: Union[str, list], 
-        col_y: str, 
-        col_ts: str = None, 
-        ts_freq: str = None, 
-        split_test_size: float = 0.3, 
-        split_shuffle: bool = False, 
-        cv_method: str = 'kfold', 
-        cv_split: int = 5, 
-        cv_shuffle: bool = False, 
-        cv_score: str = 'mse', 
-        exp_model: bool = True
+        data           : Union[pd.DataFrame, dict],
+        col_x          : Union[str, list],
+        col_y          : str,
+        col_ts         : str   = None,
+        ts_freq        : str   = None,
+        split_test_size: float = 0.3,
+        split_shuffle  : bool  = False,
+        cv_method      : str   = 'kfold',
+        cv_split       : int   = 5,
+        cv_shuffle     : bool  = False,
+        cv_score       : str   = 'mse',
+        exp_model      : bool  = True
     ) -> None:
         super().__init__(data, col_x, col_y, col_ts, ts_freq, split_test_size, split_shuffle, cv_method, cv_split, cv_shuffle, cv_score, exp_model)
-        self._init_model(MeanRegBuilder)
+        self._init_model(MeanRegBuilder,CentralMetric)
     

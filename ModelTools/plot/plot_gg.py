@@ -5,7 +5,7 @@ from sklearn.linear_model import QuantileRegressor
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.pipeline import Pipeline
 
-def gg_Tvp(data,y_name,y_pred_name,caption,add_lm=False,add_outlier=False,add_quantile=False,scales='fixed',figure_size=(10, 5)):
+def gg_Tvp(data,y_name,y_pred_name,add_lm=False,add_outlier=False,add_quantile=False,scales='fixed',figure_size=(10, 5)):
     gg.options.figure_size = figure_size
     plot = (
         gg.ggplot(data)
@@ -14,7 +14,6 @@ def gg_Tvp(data,y_name,y_pred_name,caption,add_lm=False,add_outlier=False,add_qu
         + gg.facet_wrap(facets='Method',scales=scales)
         + gg.labs(
             title=f'True_{y_name} VS Predict_{y_name}',
-            caption=caption,
             x = f'True_{y_name}',
             y = f'Pred_{y_name}'
         )
@@ -55,7 +54,7 @@ def gg_Tvp(data,y_name,y_pred_name,caption,add_lm=False,add_outlier=False,add_qu
     return plot
 
 
-def gg_Pts(data,y_name,caption,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed'):
+def gg_Pts(data,y_name,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed'):
     gg.options.figure_size = figure_size
     #TODO 当预测值或实际值存在较大的异常值时，图形会缩放，导致难以观察，调整
     if drop_anomaly is True:
@@ -74,7 +73,6 @@ def gg_Pts(data,y_name,caption,time_limit=None,drop_anomaly=False,figure_size=(1
         + gg.labs(
             color = ' ',
             title = f'Time Series for True_{y_name} and Predict_{y_name}',
-            caption = caption,
             y = y_name
         )
     )
@@ -85,7 +83,7 @@ def gg_Pts(data,y_name,caption,time_limit=None,drop_anomaly=False,figure_size=(1
     
     return plot
 
-def gg_Rts(data,caption,iqr,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed'):
+def gg_Rts(data,iqr,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed'):
     gg.options.figure_size = figure_size
     plot = (
         gg.ggplot(data)
@@ -94,7 +92,6 @@ def gg_Rts(data,caption,iqr,add_iqr_line=False,time_limit=None,figure_size=(10, 
         + gg.facet_wrap(facets='Method',ncol=1,scales=scales)
         + gg.labs(
             title = 'Time Series for Residual',
-            caption=caption,
         )
     )
     

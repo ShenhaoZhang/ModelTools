@@ -13,7 +13,6 @@ from tqdm import tqdm
 from tabulate import tabulate
 
 from ..data.data import Data
-from ..metric.metric import Metric
 from ..explain.explain import Explain
 from ..plot.corr import scatter
 from ..tools.novelty import Novelty
@@ -118,14 +117,17 @@ class BaseModel:
             col_ts = self.col_ts
         ) 
     
-    def _init_model(self,Builder):
+    #TODO 考虑放到fit中
+    def _init_model(self,Builder,Metric):
         # 配置模型的Pipeline
-        self.mr_builder = Builder(
+        self._builder = Builder(
             cv_score   = self.cv_score,
             cv_method  = self.cv_method,
             cv_shuffle = self.cv_shuffle,
             cv_split   = self.cv_split
         ) 
+        
+        self._metric = Metric
         
     def fit(
         self, 
@@ -168,15 +170,15 @@ class BaseModel:
             raise Exception('当best_model_only为True时, best_model不能为auto')
         
         if update_param is not None:
-            self.mr_builder.update_param(update_param)
+            self._builder.update_param(update_param)
             update_param_name = [param.split('__')[0] for param in update_param.keys()]
             
         model_struct = []
         base = base if isinstance(base,list) else [base]
         for bases_type in base:
-            if bases_type not in self.mr_builder.struct.keys():
+            if bases_type not in self._builder.struct.keys():
                 raise ValueError(f'base有误: {bases_type}')
-            model_struct += self.mr_builder.struct.get(bases_type)
+            model_struct += self._builder.struct.get(bases_type)
         
         # 在基础模型上增加模型
         if add_models is not None:
@@ -189,13 +191,13 @@ class BaseModel:
             # 解析字符
             if isinstance(struct,str):
                 name  = struct
-                model = self.mr_builder.get_model_cv(struct=struct)
+                model = self._builder.get_model_cv(struct=struct)
             elif isinstance(struct,dict):
                 #TODO 此处未测试
                 name       = struct['name']
                 estimator  = struct['estimator']
                 param_grid = struct['param_grid']
-                model = self.mr_builder.get_model_cv(estimator=estimator,param_grid=param_grid)
+                model = self._builder.get_model_cv(estimator=estimator,param_grid=param_grid)
             
             # 判断是否需要重新拟合
             is_contain_param = any([p_name in name for p_name in update_param_name]) if update_param is not None else False # struct中是否包含了任意一个update_param
@@ -230,7 +232,7 @@ class BaseModel:
         self.best_model_test_resid = self.test_y.to_numpy() - self.best_model.predict(self.test_x)
         
         # 各个模型在训练集上的效果评估
-        self.MetricTrain = Metric(
+        self.MetricTrain = self._metric(
             y_true      = self.train_y.to_numpy(),
             y_pred      = list(self.all_train_predict.values()),
             y_pred_name = list(self.all_train_predict.keys()),
@@ -240,7 +242,7 @@ class BaseModel:
         )
         
         # 各个模型在测试集上的效果评估
-        self.MetricTest = Metric(
+        self.MetricTest = self._metric(
             y_true      = self.test_y.to_numpy(),
             y_pred      = list(self.all_test_predict.values()),
             y_pred_name = list(self.all_test_predict.keys()),
@@ -259,6 +261,7 @@ class BaseModel:
             )
             
         # 打印结果
+        # TODO 做成方法 独立出来
         if print_result == True:
             best_model_metric = pd.concat([
                 self.MetricTrain.get_metric().loc[[self.best_model_name]],
@@ -270,7 +273,7 @@ class BaseModel:
                 f"Best Model(CV)   : {self.best_model_name} ({self.cv_score.upper()}) \n"
                 f"Hyperparameters  : {best_model_param} \n"
                 f"Train Test Split : test_size={self.split_test_size}, shuffle={self.split_shuffle}, random_state=0 \n"
-                f"Cross Validation : {str(self.mr_builder.cv)} \n \n"
+                f"Cross Validation : {str(self._builder.cv)} \n \n"
                 f"{tabulate(best_model_metric.round(4),headers=best_model_metric.columns)} \n \n"
             )
             print(message)
@@ -288,7 +291,7 @@ class BaseModel:
         self.final_model_resid = data_y - self.final_model.predict(data_x)
         
         # 最终模型在全部数据上的表现
-        self.MetricFinal = Metric(
+        self.MetricFinal = self._metric(
             y_true      = self.data.loc[:,self.col_y].to_numpy(),
             y_pred      = [self.predict()],
             y_pred_name = [self.final_model_name],

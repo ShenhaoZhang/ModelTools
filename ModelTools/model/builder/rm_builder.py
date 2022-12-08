@@ -4,7 +4,7 @@ from sklearn import ensemble as en
 from sklearn import metrics
 from sklearn import preprocessing as pr
 
-from .base import BaseBuilder
+from ._base import BaseBuilder
 
 
 class MeanRegBuilder(BaseBuilder):

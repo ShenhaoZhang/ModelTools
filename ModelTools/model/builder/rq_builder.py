@@ -6,7 +6,7 @@ from sklearn.ensemble import(
 from sklearn import metrics
 from sklearn import preprocessing as pr
 
-from .base import BaseBuilder
+from ._base import BaseBuilder
 
 class QuantileRegBuilder(BaseBuilder):
     def __init__(
