@@ -1,6 +1,6 @@
 import pandas as pd
 import altair as alt 
-#TODO 全部迁移至plot中
+
 def plot_TvP(data,y_name,scales='fixed',select=None):
     base_Chart = alt.Chart(data)
     plot = _tvp_scatter(

@@ -25,15 +25,6 @@ class Data:
         self.col_x  = col_x if col_x is not None else self.data.columns
         self.col_y  = col_y
         self.col_ts = col_ts
-        
-    # TODO不应该放在这里
-    def get_novelty_score(self,label_train:str='train',label_test:str='test',method='lof'):
-        train_x = self.data.loc[self.data._label==label_train,self.col_x]
-        test_x  = self.data.loc[self.data._label==label_test,self.col_x]
-        if len(train_x)==0 or len(test_x)==0:
-            raise Exception(f'没有获取到{label_train}或{label_test}对应的数据')
-        score = Novelty(train_x=train_x,test_x=test_x).get_score(method=method)
-        return score
     
     def plot_distribution(self):
         # 直方图

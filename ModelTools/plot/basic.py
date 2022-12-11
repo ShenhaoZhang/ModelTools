@@ -69,8 +69,8 @@ class BasicPlot:
         self,
         x='x',
         rotate=False,
-        x_title=None,
-        y_title=None,
+        x_title=alt.Undefined,
+        y_title=alt.Undefined,
     ):
         self.__check_param(x)
         x = self.__chose_param(x)
@@ -90,12 +90,18 @@ class BasicPlot:
         return plot
     
     @__set_figure
-    def density(self,x='x',rotate=False):
+    def density(
+        self,
+        x='x',
+        rotate=False,
+        x_title=alt.Undefined,
+        y_title=alt.Undefined,
+    ):
         self.__check_param('x')
         x = self.__chose_param(x)
         
-        X = alt.X(x,type='quantitative')
-        Y = alt.Y('density',type='quantitative')
+        X = alt.X(x,type='quantitative',title=x_title)
+        Y = alt.Y('density',type='quantitative',title=y_title)
         if rotate is True:
             X,Y = Y,X
              
@@ -106,21 +112,32 @@ class BasicPlot:
                 as_=[x,'density']
             )
             .encode(x = X,y = Y, order=x)
-            .mark_line()
+            .mark_line(color=self.color)
         )
         return plot
     
     @__set_figure
-    def line(self):
+    def line(
+        self,
+        select   = None,
+        filter   = None,
+        color_by = alt.Undefined,
+        y_lim    = alt.Undefined,
+        x_title  = alt.Undefined,
+        y_title  = alt.Undefined
+    ):
         self.__check_param('xy')
         plot = (
             self.base 
             .encode(
-                x = alt.X(self.x),
-                y = alt.Y(self.y)
+                x = alt.X(self.x,title=x_title),
+                y = alt.Y(self.y,title=y_title,scale=alt.Scale(domain=y_lim)),
+                color = alt.Color(color_by,type='nominal')
             )
-            .mark_line()
         )
+        plot = plot.mark_line(color=self.color) if color_by == alt.Undefined else plot.mark_line()
+        plot = plot.add_selection(select) if select is not None else plot
+        plot = plot.transform_filter(filter) if filter is not None else plot
         return plot
     
     @__set_figure
@@ -163,7 +180,7 @@ class BasicPlot:
                 .mark_line(color=self.color)
                 .encode(
                     x = alt.X(self.x),
-                    y = alt.Y('cal_y',type='quantitative')
+                    y = alt.Y('cal_y',type='quantitative',title=self.y)
                 )
             )
         return plot

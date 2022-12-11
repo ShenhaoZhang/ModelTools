@@ -1,29 +1,29 @@
+from pandas import DataFrame
 from typing import Union
 
-import pandas as pd
 import statsmodels.api as sm 
-import altair as alt
 
 from .basic import BasicPlot
 
 def corr_scatter(
-    data,
-    x,
-    y,
-    fig_width = 600,
-    fig_height = 400,
-    lab_x = None,
-    lab_y = None,
-    lab_title=None,
-    lab_subtitle=None,
-    smooth_method = 'ols',
-    stats_info = True,
-    qr_alpha=0.5,
-    v_line:dict = None,
-    h_line:dict = None,
-    v_line_pos = 'left'
+    data         : DataFrame,
+    x            : str,
+    y            : str,
+    fig_width    : int   = 600,
+    fig_height   : int   = 400,
+    lab_x        : str   = None,
+    lab_y        : str   = None,
+    lab_title    : str   = None,
+    geom_dist    : str   = 'density',
+    smooth_method: str   = 'ols',
+    stats_info   : bool  = True,
+    qr_alpha     : float = 0.5,
+    v_line       : dict  = None,
+    h_line       : dict  = None,
+    v_line_pos   : str   = 'left'
 ):
     
+    # 标签
     lab_x = x if lab_x is None else lab_x
     lab_y = y if lab_y is None else lab_y
     lab_title = f'Relationship between {lab_x} and {lab_y}' if lab_title is None else lab_title
@@ -34,29 +34,47 @@ def corr_scatter(
         x=x,
         y=y 
     )
+    
+    # 图形大小
     scatter_width  = fig_width * 0.9
     scatter_height = fig_height * 0.9
-    hist_up_width  = scatter_width
-    hist_up_height = fig_height - scatter_height
-    hist_rt_width  = fig_width - scatter_width
-    hist_rt_height = scatter_height
+    dist_up_width  = scatter_width
+    dist_up_height = fig_height - scatter_height
+    dist_rt_width  = fig_width - scatter_width
+    dist_rt_height = scatter_height
     
+    # 散点图
     scatter = (
         basic
         .set_attr('figure_size',[scatter_width,scatter_height])
         .scatter()
     )
-    hist_up = (
-        basic
-        .set_attr('figure_size',[hist_up_width,hist_up_height])
-        .hist(x=x)
-    )
-    hist_rt = (
-        basic
-        .set_attr('figure_size',[hist_rt_width,hist_rt_height])
-        .hist(x=y,rotate=True)
-    )
     
+    # 分布图
+    if geom_dist == 'density':
+        dist_up = (
+            basic
+            .set_attr('figure_size',[dist_up_width,dist_up_height])
+            .density(x=x,x_title=None,y_title=None)
+        )
+        dist_rt = (
+            basic
+            .set_attr('figure_size',[dist_rt_width,dist_rt_height])
+            .density(x=y,rotate=True,x_title=None,y_title=None)
+        )
+    elif geom_dist == 'hist':
+        dist_up = (
+            basic
+            .set_attr('figure_size',[dist_up_width,dist_up_height])
+            .hist(x=x,x_title=None,y_title=None)
+        )
+        dist_rt = (
+            basic
+            .set_attr('figure_size',[dist_rt_width,dist_rt_height])
+            .hist(x=y,rotate=True,x_title=None,y_title=None)
+        )
+    
+    # 均值回归曲线
     if smooth_method == 'ols':
         smooth = basic.smooth(method='linear')
         scatter += smooth
@@ -85,7 +103,7 @@ def corr_scatter(
                     f'CI_0.95 = [ {round(ols.conf_int().at[param,0],2)}, {round(ols.conf_int().at[param,1],2)} ]'
                 )
                 lab_subtitle.append(info_coef)
-                
+    # 分位数回归曲线   
     elif smooth_method == 'qr':
         X = data.loc[:,x]
         X = sm.add_constant(X)
@@ -111,24 +129,24 @@ def corr_scatter(
                 )
                 lab_subtitle.append(info_coef)
     
+    # 水平及垂直辅助线
     if v_line is not None:
         ...
     if h_line is not None:
         for name,value in h_line.items():
             scatter += basic.abline(slope=0,intercept=value,name=name,name_position=v_line_pos)
     
-    plot = hist_up & (scatter | hist_rt)
-    
+    plot = dist_up & (scatter | dist_rt)
     plot = (
         plot.properties(
             title={'text':lab_title,'subtitle':lab_subtitle}
         )
         .configure_title(
-            fontSize=20,
-            baseline='middle',
-            subtitleFontSize=15,
-            subtitleColor='grey',
-            offset=20,
+            fontSize         = 20,
+            baseline         = 'middle',
+            subtitleFontSize = 15,
+            subtitleColor    = 'grey',
+            offset           = 20,
         )
     )
     

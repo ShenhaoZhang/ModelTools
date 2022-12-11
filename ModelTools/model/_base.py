@@ -14,7 +14,6 @@ from tabulate import tabulate
 
 from ..data.data import Data
 from ..explain.explain import Explain
-from ..plot.corr import scatter
 from ..tools.novelty import Novelty
 from ..plot.corr_scatter import corr_scatter
 
