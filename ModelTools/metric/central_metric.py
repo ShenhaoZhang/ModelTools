@@ -5,8 +5,8 @@ from sklearn import metrics
 
 from ..plot import plot_gg
 from ..plot import plot_alt
-from ..plot.evo import multi_line
 from ._base import BaseMetric
+from ..plot.ts_line import ts_line
 
 class CentralMetric(BaseMetric):
     def __init__(
@@ -74,72 +74,83 @@ class CentralMetric(BaseMetric):
         return metric
     
     #TODO 可选日期作为y轴
-    def plot_TvP(self,focus:list = None, add_lm=False, add_outlier=False, add_quantile=False, figure_size=(10, 5), scales='fixed', engine='gg'):
-        focus = focus if focus is not None else self.focus
-        plot_data = self.data.loc[lambda dt:dt.Method.isin(focus)]
+    def plot_TvP(
+        self,
+        highlight_y:list = None, 
+        add_lm=False, 
+        add_outlier=False, 
+        add_quantile=False, 
+        figure_size=(10, 5), 
+        scales='fixed', 
+    ):
+        highlight_y = highlight_y if highlight_y is not None else self.highlight_y
+        plot_data = self.data.loc[lambda dt:dt.Method.isin(highlight_y)]
         
-        if engine == 'gg':
-            plot = plot_gg.gg_Tvp(
-                data         = plot_data,
-                y_name       = self.y_name,
-                y_pred_name  = self.y_pred_name,
-                add_lm       = add_lm,
-                add_outlier  = add_outlier,
-                add_quantile = add_quantile,
-                figure_size  = figure_size,
-                scales       = scales
-            )
-        elif engine == 'alt':
-            plot = plot_alt.plot_TvP(
-                data   = plot_data,
-                y_name = self.y_name,
-                scales = scales
-            )
+        plot = plot_alt.plot_TvP(
+            data   = plot_data,
+            y_name = self.y_name,
+            scales = scales
+        )
         return plot
     
-    def plot_Pts(self,focus:list = None,time_limit=None,drop_anomaly=False,figure_size=(10, 5),scales='fixed',engine='gg'):
-        focus = focus if focus is not None else self.focus
-        plot_data = self.data.loc[lambda dt:dt.Method.isin(focus)]
-        
-        if engine == 'gg':
-            plot = plot_gg.gg_Pts(
-                data         = plot_data,
-                y_name       = self.y_name,
-                time_limit   = time_limit,
-                drop_anomaly = drop_anomaly,
-                figure_size  = figure_size,
-                scales       = scales
-            )
-        elif engine == 'alt':
-            plot = multi_line(
-                data  = plot_data,
-                x     = 'Time',
-                y     = 'Pred',
-                facet = 'Method'
-            )
+    def plot_Pts(
+        self,
+        add_focus   :bool  = True,
+        highlight_y :list  = None,
+        drop_anomaly:bool  = False,
+        figure_size :tuple = (1200,None),
+        scales      :str   = 'fixed'
+    ):
+        highlight_y = highlight_y if highlight_y is not None else self.highlight_y
+        plot_data = (
+            self.data
+            .loc[lambda dt:dt.Method.isin(highlight_y)]
+            .melt(id_vars=['Time','Method'],value_vars=['True_y','Pred'])
+            .pivot(index=['Time','variable'],columns='Method',values='value')
+            .reset_index()
+        )
+        plot = ts_line(
+            data         = plot_data,
+            x            = 'Time',
+            y            = highlight_y,
+            color_by     = 'variable',
+            add_focus    = add_focus,
+            scales       = scales,
+            fig_width    = figure_size[0],
+            fig_height   = figure_size[1],
+            color_legend = None
+        )
         return plot
         
-    def plot_Rts(self,focus:list = None,add_iqr_line=False,time_limit=None,figure_size=(10, 5),scales='fixed',engine='gg'):
-        focus = focus if focus is not None else self.focus
-        plot_data = self.data.loc[lambda dt:dt.Method.isin(focus)]
+    def plot_Rts(
+        self,
+        add_focus   :bool   = True,
+        highlight_y :list   = None,
+        add_iqr_line:bool   = False,
+        figure_size  :tuple = (1200,None),
+        scales      :str    = 'fixed',
+    ):
+        highlight_y = highlight_y if highlight_y is not None else self.highlight_y
         
-        if engine == 'gg':
-            plot = plot_gg.gg_Rts(
-                data         = plot_data,
-                add_iqr_line = add_iqr_line,
-                iqr          = self.resid_total_iqr,
-                time_limit   = time_limit,
-                figure_size  = figure_size,
-                scales       = scales
-            )
-        elif engine == 'alt':
-            plot = multi_line(
-                data   = plot_data,
-                x      = 'Time',
-                y      = 'Resid',
-                facet  = 'Method',
-                scales = scales
-            )
+        plot_data = (
+            self.data
+            .loc[lambda dt:dt.Method.isin(highlight_y)]
+            .melt(id_vars=['Time','Method'],value_vars=['Resid'])
+            .pivot(index=['Time','variable'],columns='Method',values='value')
+            .reset_index()
+        )
+        
+        plot = ts_line(
+            data         = plot_data,
+            x            = 'Time',
+            y            = highlight_y,
+            add_focus    = add_focus,
+            scales       = scales,
+            fig_width    = figure_size[0],
+            fig_height   = figure_size[1],
+            color_legend = None
+        )
+        
         return plot
     
     def plot_Rar(self):

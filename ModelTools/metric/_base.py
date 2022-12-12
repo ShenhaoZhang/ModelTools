@@ -61,7 +61,7 @@ class BaseMetric:
         # 限定评估的数量
         highlight_count = len(self.highlight)
         if highlight_count >= 6:
-            self.focus = list(self.highlight.keys())
+            self.highlight_y = list(self.highlight.keys())
         else:
             top_metric_count = 6 - highlight_count
             top_metric = (
@@ -71,7 +71,7 @@ class BaseMetric:
                 .head(top_metric_count)
                 .index.to_list()
             )
-            self.focus = list(self.highlight.keys()) + top_metric
+            self.highlight_y = list(self.highlight.keys()) + top_metric
         
         self.data = None
         self._init_outlier()

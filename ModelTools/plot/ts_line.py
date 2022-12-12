@@ -3,14 +3,15 @@ import altair as alt
 from .basic import BasicPlot
 
 def ts_line(
-    data:DataFrame,
-    x:str,
-    y:list,
-    fig_width : int   = 1000,
-    fig_height: int   = None,
-    scales: str = 'fixed',
-    color_by = alt.Undefined,
-    add_focus:bool = False
+    data        : DataFrame,
+    x           : str,
+    y           : list,
+    fig_width   : int   = 1000,
+    fig_height  : int   = None,
+    scales      : str   = 'fixed',
+    color_by    : str   = alt.Undefined,
+    color_legend: str   = alt.Undefined,
+    add_focus   : bool  = False,
 ):
     if add_focus:
         line_width = 0.6 * fig_width
@@ -34,13 +35,13 @@ def ts_line(
         if add_focus:
             base.set_attr('y',y_name)
             base.set_attr('figure_size',[line_width,line_height])
-            plot_line = base.line(y_lim=y_lim,select=selection,color_by=color_by)
+            plot_line = base.line(y_lim=y_lim,select=selection,color_by=color_by,color_legend=color_legend)
             
             base.set_attr('figure_size',[focus_width,line_height])
-            plot_focus = base.line(y_lim=y_lim,filter=selection,color_by=color_by)
+            plot_focus = base.line(y_lim=y_lim,filter=selection,color_by=color_by,color_legend=color_legend)
             plot_row = plot_line | plot_focus
         else:
-            plot_row = base.set_attr('y',y_name).line(y_lim=y_lim,color_by=color_by)
+            plot_row = base.set_attr('y',y_name).line(y_lim=y_lim,color_by=color_by,color_legend=color_legend)
         plot = plot & plot_row
     
     return plot

@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd 
 import plotnine as gg
 
-from ..plot.composite import ts_scatter
 from ..tools.novelty import Novelty
 
 class Data:

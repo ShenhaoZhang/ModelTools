@@ -119,12 +119,13 @@ class BasicPlot:
     @__set_figure
     def line(
         self,
-        select   = None,
-        filter   = None,
-        color_by = alt.Undefined,
-        y_lim    = alt.Undefined,
-        x_title  = alt.Undefined,
-        y_title  = alt.Undefined
+        select       = None,
+        filter       = None,
+        color_by     = alt.Undefined,
+        color_legend = alt.Undefined,
+        y_lim        = alt.Undefined,
+        x_title      = alt.Undefined,
+        y_title      = alt.Undefined
     ):
         self.__check_param('xy')
         plot = (
@@ -132,7 +133,11 @@ class BasicPlot:
             .encode(
                 x = alt.X(self.x,title=x_title),
                 y = alt.Y(self.y,title=y_title,scale=alt.Scale(domain=y_lim)),
-                color = alt.Color(color_by,type='nominal')
+                color = alt.Color(
+                    color_by,
+                    type='nominal',
+                    legend = alt.Legend(title=color_legend,orient='top')
+                ),
             )
         )
         plot = plot.mark_line(color=self.color) if color_by == alt.Undefined else plot.mark_line()
