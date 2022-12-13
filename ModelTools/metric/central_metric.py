@@ -105,8 +105,9 @@ class CentralMetric(BaseMetric):
         plot_data = (
             self.data
             .loc[lambda dt:dt.Method.isin(highlight_y)]
-            .melt(id_vars=['Time','Method'],value_vars=['True_y','Pred'])
+            .melt(id_vars=['Time','Method'],value_vars=[f'True_{self.y_name}','Pred'])
             .pivot(index=['Time','variable'],columns='Method',values='value')
+            .sort_values('variable',ascending=False) # 调整图层顺序
             .reset_index()
         )
         plot = ts_line(
