@@ -23,6 +23,7 @@ class CentralRegBuilder(BaseBuilder):
             'inter__degree'        : [1,2,3],
             'sp__extrapolation'    : ['constant','continue','linear'],
             'sp__knots'            : ['uniform','quantile'],
+            'EN__l1_ratio'         : [.1,.5,.7,.9,.95,.99,1],
             'DT__max_depth'        : [2,4,6,8,10],
             'DT__min_samples_split': [5,30,90,200],
             'RF__max_features'     : [1,'sqrt'],
@@ -32,7 +33,7 @@ class CentralRegBuilder(BaseBuilder):
             'OLS'  : lm.LinearRegression(), 
             'LAR'  : lm.Lars(normalize=False),
             'HUBER': lm.HuberRegressor(),
-            'EN'   : lm.ElasticNetCV(l1_ratio=[.1,.5,.7,.9,.95,.99,1],random_state=0),
+            'EN'   : lm.ElasticNet(random_state=0),
             # 'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),  #TODO 条件alpha
             'BR'   : lm.BayesianRidge(),
             'DT'   : tree.DecisionTreeRegressor(random_state=0),

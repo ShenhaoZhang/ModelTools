@@ -207,6 +207,20 @@ class BasicPlot:
             .mark_line(color=self.color)
         )
         return plot
+    
+    @__set_figure
+    def error_band(self,y_up,y_down,opacity=0.5):
+        self.__check_param('x')
+        plot = (
+            self.base
+            .encode(
+                x = alt.X(self.x),
+                y = alt.Y(y_up),
+                y2 = alt.Y2(y_down)
+            )
+            .mark_area(opacity=opacity,color=self.color)
+        )
+        return plot 
 
     def __check_param(self,type):
         if type == 'xy':

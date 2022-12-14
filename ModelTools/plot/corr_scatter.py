@@ -17,6 +17,7 @@ def corr_scatter(
     geom_dist    : str   = 'density',
     smooth_method: str   = 'ols',
     smooth_color : str   = 'black',
+    smooth_ci    : str   = 0.95,
     stats_info   : bool  = True,
     qr_alpha     : float = 0.5,
     v_line       : dict  = None,
@@ -86,6 +87,10 @@ def corr_scatter(
         Y = data.loc[:,y]
         ols = sm.OLS(Y,X).fit()
         
+        if smooth_ci is not None:
+            ci_interval = _get_ci_plot(X,x,ols,alpha=1-smooth_ci)
+            scatter += ci_interval
+        
         if stats_info:
             info_mod = (
                 f'Regressiond Method = Linear Regression,  '
@@ -102,7 +107,7 @@ def corr_scatter(
                     f'coef = {round(ols.params[param],2)},  '
                     f't = {round(ols.tvalues[param],2)},  '
                     f'p = {round(ols.pvalues[param],4)},  '
-                    f'CI_0.95 = [ {round(ols.conf_int().at[param,0],2)}, {round(ols.conf_int().at[param,1],2)} ]'
+                    f'CI_{smooth_ci} = [ {round(ols.conf_int(1-smooth_ci).at[param,0],2)}, {round(ols.conf_int(1-smooth_ci).at[param,1],2)} ]'
                 )
                 lab_subtitle.append(info_coef)
     # 分位数回归曲线   
@@ -112,6 +117,10 @@ def corr_scatter(
         Y = data.loc[:,y]
         qr = sm.QuantReg(Y,X).fit(q=qr_alpha)
         scatter += basic.set_attr('color',smooth_color).abline(slope=qr.params[x],intercept=qr.params['const'])
+        
+        if smooth_ci is not None:
+            ci_interval = _get_ci_plot(X,x,qr,alpha=1-smooth_ci)
+            scatter += ci_interval
         
         if stats_info:
             info_mod = (
@@ -127,7 +136,7 @@ def corr_scatter(
                     f'coef = {round(qr.params[param],2)},  '
                     f't = {round(qr.tvalues[param],2)},  '
                     f'p = {round(qr.pvalues[param],4)},  '
-                    f'CI_0.95 = [ {round(qr.conf_int().at[param,0],2)}, {round(qr.conf_int().at[param,1],2)} ]'
+                    f'CI_{smooth_ci} = [ {round(qr.conf_int(1-smooth_ci).at[param,0],2)}, {round(qr.conf_int(1-smooth_ci).at[param,1],2)} ]'
                 )
                 lab_subtitle.append(info_coef)
     
@@ -153,3 +162,9 @@ def corr_scatter(
     )
     
     return plot
+
+def _get_ci_plot(X,x,mod,alpha):
+    ci = mod.get_prediction(X).summary_frame(alpha=alpha)
+    ci[x] = X.loc[:,x]
+    ci_interval = BasicPlot(data=ci,x=x).error_band(y_up='mean_ci_upper',y_down='mean_ci_lower',opacity=0.3)
+    return ci_interval
