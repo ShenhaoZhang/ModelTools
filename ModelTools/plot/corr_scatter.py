@@ -16,6 +16,7 @@ def corr_scatter(
     lab_title    : str   = None,
     geom_dist    : str   = 'density',
     smooth_method: str   = 'ols',
+    smooth_color : str   = 'black',
     stats_info   : bool  = True,
     qr_alpha     : float = 0.5,
     v_line       : dict  = None,
@@ -75,8 +76,9 @@ def corr_scatter(
         )
     
     # 均值回归曲线
+    #TODO 增加置信区间
     if smooth_method == 'ols':
-        smooth = basic.smooth(method='linear')
+        smooth = basic.set_attr('color',smooth_color).smooth(method='linear')
         scatter += smooth
         
         X = data.loc[:,x]
@@ -109,7 +111,7 @@ def corr_scatter(
         X = sm.add_constant(X)
         Y = data.loc[:,y]
         qr = sm.QuantReg(Y,X).fit(q=qr_alpha)
-        scatter += basic.abline(slope=qr.params[x],intercept=qr.params['const'])
+        scatter += basic.set_attr('color',smooth_color).abline(slope=qr.params[x],intercept=qr.params['const'])
         
         if stats_info:
             info_mod = (
@@ -134,7 +136,7 @@ def corr_scatter(
         ...
     if h_line is not None:
         for name,value in h_line.items():
-            scatter += basic.abline(slope=0,intercept=value,name=name,name_position=v_line_pos)
+            scatter += basic.set_attr('color','black').abline(slope=0,intercept=value,name=name,name_position=v_line_pos)
     
     plot = dist_up & (scatter | dist_rt)
     plot = (

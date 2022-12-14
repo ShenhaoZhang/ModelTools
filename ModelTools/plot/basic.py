@@ -132,7 +132,7 @@ class BasicPlot:
             self.base 
             .encode(
                 x = alt.X(self.x,title=x_title),
-                y = alt.Y(self.y,title=y_title,scale=alt.Scale(domain=y_lim)),
+                y = alt.Y(self.y,title=y_title,scale=alt.Scale(domain=y_lim,zero=False)),
                 color = alt.Color(
                     color_by,
                     type='nominal',
@@ -204,7 +204,7 @@ class BasicPlot:
                 x = alt.X(self.x,type='quantitative'),
                 y = alt.Y(self.y,type='quantitative')
             )
-            .mark_line()
+            .mark_line(color=self.color)
         )
         return plot
 
