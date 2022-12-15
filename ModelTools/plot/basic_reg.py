@@ -17,7 +17,7 @@ def basic_reg(
     show_stats_info : bool  = True
 ) -> alt.Chart:
     ...
-    # reg_method 
+    # reg_method OLS / QR
     #   OLS        y = a + b * x
     #   OLS_log    y = a + b * log(x)
     #   OLS_exp    y = a + e^(b * x)
