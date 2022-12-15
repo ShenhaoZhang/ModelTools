@@ -154,6 +154,16 @@ class CentralMetric(BaseMetric):
         
         return plot
     
+    def plot_Racf(self):
+        ...
+    
     def plot_Rar(self):
         ...
         #TODO 残差的自回归矩阵图
+    
+    def plot_Rqqnorm(self):
+        ...
+    
+    def plot_RHeteroskedasticity(self):
+        ...
+        # sqrt_abs_std_resid

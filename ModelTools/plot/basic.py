@@ -67,10 +67,10 @@ class BasicPlot:
     @__set_figure
     def hist(
         self,
-        x='x',
-        rotate=False,
-        x_title=alt.Undefined,
-        y_title=alt.Undefined,
+        x       = 'x',
+        rotate  = False,
+        x_title = alt.Undefined,
+        y_title = alt.Undefined,
     ):
         self.__check_param(x)
         x = self.__choose_param(x)
@@ -92,10 +92,10 @@ class BasicPlot:
     @__set_figure
     def density(
         self,
-        x='x',
-        rotate=False,
-        x_title=alt.Undefined,
-        y_title=alt.Undefined,
+        x       = 'x',
+        rotate  = False,
+        x_title = alt.Undefined,
+        y_title = alt.Undefined,
     ):
         self.__check_param('x')
         x = self.__choose_param(x)
