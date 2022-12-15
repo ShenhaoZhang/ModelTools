@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import dalex as dx
 
-class Explain:
+class MaExplain:
     def __init__(self,model,model_type,data_x,data_y) -> None:
         self.model = model 
         self.model_type = model_type

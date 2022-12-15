@@ -13,7 +13,7 @@ from tqdm import tqdm
 from tabulate import tabulate
 
 from ...data.data import Data
-from ...explain.explain import Explain
+from ...explain.model_agnostic import MaExplain
 from ...tools.novelty import Novelty
 from ...plot.corr_scatter import corr_scatter
 
@@ -256,7 +256,7 @@ class BaseModel:
         
         if self._exp_model == True:
             # 解释模型
-            self.ExpTrain = Explain(
+            self.ExpTrain = MaExplain(
                 model      = self.best_model,
                 model_type = 'regression',
                 data_x     = self.test_x,
@@ -304,7 +304,7 @@ class BaseModel:
             **self._metric_kwargs
         )
         if self._exp_model == True:
-            self.ExpFinal = Explain(
+            self.ExpFinal = MaExplain(
                 model      = self.final_model,
                 model_type = 'regression',
                 data_x     = self.data.loc[:,self.col_x],
