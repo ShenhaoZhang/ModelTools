@@ -19,7 +19,7 @@ def corr_scatter(
     smooth_color : str   = 'black',
     smooth_ci    : str   = 0.95,
     stats_info   : bool  = True,
-    qr_alpha     : float = 0.5,
+    qr_quantile  : float = 0.5,
     v_line       : dict  = None,
     h_line       : dict  = None,
     v_line_pos   : str   = 'left'
@@ -76,8 +76,8 @@ def corr_scatter(
             .hist(x=y,rotate=True,x_title=None,y_title=None)
         )
     
+    # TODO 将回归曲线独立出来
     # 均值回归曲线
-    #TODO 增加置信区间
     if smooth_method == 'ols':
         smooth = basic.set_attr('color',smooth_color).smooth(method='linear')
         scatter += smooth
@@ -115,7 +115,7 @@ def corr_scatter(
         X = data.loc[:,x]
         X = sm.add_constant(X)
         Y = data.loc[:,y]
-        qr = sm.QuantReg(Y,X).fit(q=qr_alpha)
+        qr = sm.QuantReg(Y,X).fit(q=qr_quantile)
         scatter += basic.set_attr('color',smooth_color).abline(slope=qr.params[x],intercept=qr.params['const'])
         
         if smooth_ci is not None:
@@ -124,7 +124,7 @@ def corr_scatter(
         
         if stats_info:
             info_mod = (
-                f'Regressiond Method = Quantile Regression(alpha={qr_alpha}),  '
+                f'Regressiond Method = Quantile Regression(Quantile={qr_quantile}),  '
                 f'Sample = {int(qr.nobs)},  '
                 f'Pseudo R2 = {round(qr.prsquared,2)}  '
             )
@@ -163,7 +163,7 @@ def corr_scatter(
     
     return plot
 
-def _get_ci_plot(X,x,mod,alpha):
+def _get_ci_plot(X,x,mod,alpha) -> DataFrame:
     ci = mod.get_prediction(X).summary_frame(alpha=alpha)
     ci[x] = X.loc[:,x]
     ci_interval = BasicPlot(data=ci,x=x).error_band(y_up='mean_ci_upper',y_down='mean_ci_lower',opacity=0.3)

@@ -12,10 +12,10 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from tabulate import tabulate
 
-from ..data.data import Data
-from ..explain.explain import Explain
-from ..tools.novelty import Novelty
-from ..plot.corr_scatter import corr_scatter
+from ...data.data import Data
+from ...explain.explain import Explain
+from ...tools.novelty import Novelty
+from ...plot.corr_scatter import corr_scatter
 
 class BaseModel:
     def __init__(
@@ -397,31 +397,32 @@ class BaseModel:
         # TODO 拟合的时间、预测效果、可视化
         ...
     
-    #TODO 考虑更改位置
     def check_novelty(self,method:str='gmm',new_data:pd.DataFrame=None,return_score:bool=False,**kwargs):
         # 当未输入new_data时，基于train_x检查test_x
         if new_data is None:
             self.__check_model_status(type='train')
             score = Novelty(train_x=self.train_x,test_x=self.test_x).get_score(method=method)
-            resid = np.abs(self.best_model_test_resid)
-            train_mae = self.MetricTrain.get_metric().at[self.best_model_name,'MAE']
+            std_resid = self.best_model_test_resid / np.std(self.best_model_test_resid)
+            abs_std_resid = np.abs(std_resid)
+            # train_mae = self.MetricTrain.get_metric().at[self.best_model_name,'MAE']
         
         # 当输入new_data时，基于整个数据集data检查new_data
         elif new_data is not None:
             self.__check_model_status(type='final')
             score = Novelty(train_x=self.data.loc[:,self.col_x],test_x=new_data.loc[:,self.col_x]).get_score(method=method)
-            resid = np.abs(new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x]))
-            train_mae = self.MetricFinal.get_metric().at[self.final_model_name,'MAE']
+            resid = new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x])
+            abs_std_resid = np.abs(resid / np.std(resid))
+            # train_mae = self.MetricFinal.get_metric().at[self.final_model_name,'MAE']
         
         if not return_score:
-            data = pd.DataFrame({'score' : score, 'abs_residual': resid })
+            data = pd.DataFrame({'score' : score, 'abs_std_residual': abs_std_resid })
             plot = corr_scatter(
-                data=data,
-                x='score',
-                y='abs_residual',
-                smooth_method='qr',
-                qr_alpha=0.95,
-                h_line={'Train_MAE':train_mae},
+                data          = data,
+                x             = 'score',
+                y             = 'abs_std_residual',
+                smooth_method = 'qr',
+                qr_quantile   = 0.95,
+                # h_line        = {'Train_MAE':train_mae},
             )
             return plot
         elif return_score:

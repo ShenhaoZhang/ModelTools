@@ -5,11 +5,6 @@ from sklearn.model_selection import (
     TimeSeriesSplit,
     KFold
 )
-from sklearn import linear_model as lm
-from sklearn import tree
-from sklearn import ensemble as en
-from sklearn import preprocessing as pr
-from sklearn import metrics
 
 #TODO 检查如何能按工况进行分组抽样
 

@@ -1,2 +1,2 @@
-from .central_reg import CentralRegression
-from .quantile_reg import QuantileRegression
+from .mod.central_reg import CentralRegression
+from .mod.quantile_reg import QuantileRegression

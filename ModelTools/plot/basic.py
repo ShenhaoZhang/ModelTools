@@ -14,12 +14,12 @@ class BasicPlot:
         color      : str  = 'black',
         figure_size: list = [600,400]
     ) -> None:
-        self.data = data 
-        self.base = convert_to_chart(data=data) 
-        self.x = x
-        self.y = y 
-        self.title = title
-        self.color = color 
+        self.data        = data
+        self.base        = convert_to_chart(data=data)
+        self.x           = x
+        self.y           = y
+        self.title       = title
+        self.color       = color
         self.figure_size = figure_size
     
     def set_attr(self,name,value):
@@ -32,8 +32,8 @@ class BasicPlot:
             adj_plot = (
                 plot 
                 .properties(
-                    title = self.title,
-                    width = self.figure_size[0],
+                    title  = self.title,
+                    width  = self.figure_size[0],
                     height = self.figure_size[1]
                 )
             )
@@ -73,7 +73,7 @@ class BasicPlot:
         y_title=alt.Undefined,
     ):
         self.__check_param(x)
-        x = self.__chose_param(x)
+        x = self.__choose_param(x)
         
         X = alt.X(x,bin=True,type='quantitative',title=x_title)
         Y = alt.Y('count()',type='quantitative',title=y_title)
@@ -98,7 +98,7 @@ class BasicPlot:
         y_title=alt.Undefined,
     ):
         self.__check_param('x')
-        x = self.__chose_param(x)
+        x = self.__choose_param(x)
         
         X = alt.X(x,type='quantitative',title=x_title)
         Y = alt.Y('density',type='quantitative',title=y_title)
@@ -160,6 +160,8 @@ class BasicPlot:
                     x = self.data.loc[:,self.x].max()
                 elif name_position == 'left':
                     x = self.data.loc[:,self.x].min()
+                else:
+                    raise Exception('Wrong name_position')
                 text = (
                     plot
                     .mark_text(baseline='line-top',color=self.color)
@@ -230,7 +232,7 @@ class BasicPlot:
             if self.x is None:
                 raise Exception('Missing x')
     
-    def __chose_param(self,x):
+    def __choose_param(self,x):
         if x == 'x':
             x = self.x 
         elif x == 'y':
@@ -238,10 +240,7 @@ class BasicPlot:
         return x
 
 
-def convert_to_chart(
-    data:Union[pd.DataFrame,alt.Chart],
-    chart_kwargs={}
-) -> alt.Chart:
+def convert_to_chart(data:Union[pd.DataFrame,alt.Chart], chart_kwargs:dict={}) -> alt.Chart:
     if isinstance(data,pd.DataFrame):
         base = alt.Chart(data,**chart_kwargs)
     elif isinstance(data,alt.Chart):
