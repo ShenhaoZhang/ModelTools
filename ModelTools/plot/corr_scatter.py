@@ -1,34 +1,36 @@
 from pandas import DataFrame
 from typing import Union
-
+import altair as alt
 import statsmodels.api as sm 
 
 from .basic import BasicPlot
+from .basic_reg import basic_reg
 
 def corr_scatter(
-    data         : DataFrame,
-    x            : str,
-    y            : str,
-    fig_width    : int   = 600,
-    fig_height   : int   = 400,
-    lab_x        : str   = None,
-    lab_y        : str   = None,
-    lab_title    : str   = None,
-    geom_dist    : str   = 'density',
-    smooth_method: str   = 'ols',
-    smooth_color : str   = 'black',
-    smooth_ci    : str   = 0.95,
-    stats_info   : bool  = True,
-    qr_quantile  : float = 0.5,
-    v_line       : dict  = None,
-    h_line       : dict  = None,
-    v_line_pos   : str   = 'left'
+    data           : DataFrame,
+    x              : str,
+    y              : str,
+    fig_width      : int   = 600,
+    fig_height     : int   = 400,
+    lab_x          : str   = None,
+    lab_y          : str   = None,
+    lab_title      : str   = None,
+    geom_dist      : str   = 'density',
+    reg_formula    : str   = 'y~x',
+    reg_method     : str   = None,
+    reg_ci_level   : str   = 0.95,
+    reg_pi_level   : str   = None,
+    reg_qr_quantile: float = 0.5,
+    stats_info     : bool  = True,
+    v_line         : dict  = None,
+    h_line         : dict  = None,
+    v_line_pos     : str   = 'left'
 ):
     
     # 标签
     lab_x = x if lab_x is None else lab_x
     lab_y = y if lab_y is None else lab_y
-    lab_title = f'Relationship between {lab_x} and {lab_y}' if lab_title is None else lab_title
+    lab_title = alt.Undefined if lab_title is None else lab_title
     lab_subtitle = []
     
     basic = BasicPlot(
@@ -76,69 +78,36 @@ def corr_scatter(
             .hist(x=y,rotate=True,x_title=None,y_title=None)
         )
     
-    # TODO 将回归曲线独立出来
-    # 均值回归曲线
-    if smooth_method == 'ols':
-        smooth = basic.set_attr('color',smooth_color).smooth(method='linear')
-        scatter += smooth
-        
-        X = data.loc[:,x]
-        X = sm.add_constant(X)
-        Y = data.loc[:,y]
-        ols = sm.OLS(Y,X).fit()
-        
-        if smooth_ci is not None:
-            ci_interval = _get_ci_plot(X,x,ols,alpha=1-smooth_ci)
-            scatter += ci_interval
-        
-        if stats_info:
-            info_mod = (
-                f'Regressiond Method = Linear Regression,  '
-                f'Sample = {int(ols.nobs)},  '
-                f'R2 = {round(ols.rsquared,2)},  '
-                f'adj_R2 = {round(ols.rsquared_adj,2)},  '
-                f'F_pvalue = {round(ols.f_pvalue,4)}'
+    # 回归曲线及置信区间
+    if isinstance(reg_qr_quantile,list) and reg_method == 'qr':
+        # 多个分位数回归曲线，此时不展示区间估计
+        for q in reg_qr_quantile:
+            reg = basic_reg(
+                data            = data,
+                x               = x,
+                y               = y,
+                formula         = reg_formula,
+                reg_method      = 'qr',
+                ci_level        = None,
+                pi_level        = None,
+                show_stats_info = False,
+                qr_quantile     = q,
             )
-            lab_subtitle.append(info_mod)
-            for param in ols.params.index:
-                param_name = 'Intercept' if param == 'const' else param
-                info_coef = (
-                    f'{param_name} :  '
-                    f'coef = {round(ols.params[param],2)},  '
-                    f't = {round(ols.tvalues[param],2)},  '
-                    f'p = {round(ols.pvalues[param],4)},  '
-                    f'CI_{smooth_ci} = [ {round(ols.conf_int(1-smooth_ci).at[param,0],2)}, {round(ols.conf_int(1-smooth_ci).at[param,1],2)} ]'
-                )
-                lab_subtitle.append(info_coef)
-    # 分位数回归曲线   
-    elif smooth_method == 'qr':
-        X = data.loc[:,x]
-        X = sm.add_constant(X)
-        Y = data.loc[:,y]
-        qr = sm.QuantReg(Y,X).fit(q=qr_quantile)
-        scatter += basic.set_attr('color',smooth_color).abline(slope=qr.params[x],intercept=qr.params['const'])
-        
-        if smooth_ci is not None:
-            ci_interval = _get_ci_plot(X,x,qr,alpha=1-smooth_ci)
-            scatter += ci_interval
-        
-        if stats_info:
-            info_mod = (
-                f'Regressiond Method = Quantile Regression(Quantile={qr_quantile}),  '
-                f'Sample = {int(qr.nobs)},  '
-                f'Pseudo R2 = {round(qr.prsquared,2)}  '
-            )
-            lab_subtitle.append(info_mod)
-            for param in qr.params.index:
-                param_name = 'Intercept' if param == 'const' else param
-                info_coef = (
-                    f'{param_name} :  '
-                    f'coef = {round(qr.params[param],2)},  '
-                    f't = {round(qr.tvalues[param],2)},  '
-                    f'p = {round(qr.pvalues[param],4)},  '
-                    f'CI_{smooth_ci} = [ {round(qr.conf_int(1-smooth_ci).at[param,0],2)}, {round(qr.conf_int(1-smooth_ci).at[param,1],2)} ]'
-                )
-                lab_subtitle.append(info_coef)
+            scatter = scatter + reg
+    elif reg_method is not None:
+        # 单个回归曲线
+        reg = basic_reg(
+            data            = data,
+            x               = x,
+            y               = y,
+            formula         = reg_formula,
+            reg_method      = reg_method,
+            ci_level        = reg_ci_level,
+            pi_level        = reg_pi_level,
+            show_stats_info = stats_info,
+            qr_quantile     = reg_qr_quantile,
+        )
+        scatter = scatter + reg
     
     # 水平及垂直辅助线
     if v_line is not None:
@@ -149,9 +118,10 @@ def corr_scatter(
     
     plot = dist_up & (scatter | dist_rt)
     plot = (
-        plot.properties(
-            title={'text':lab_title,'subtitle':lab_subtitle}
-        )
+        plot
+        # .properties(
+        #     title={'text':lab_title,'subtitle':lab_subtitle}
+        # )
         .configure_title(
             fontSize         = 20,
             baseline         = 'middle',
@@ -162,9 +132,3 @@ def corr_scatter(
     )
     
     return plot
-
-def _get_ci_plot(X,x,mod,alpha) -> DataFrame:
-    ci = mod.get_prediction(X).summary_frame(alpha=alpha)
-    ci[x] = X.loc[:,x]
-    ci_interval = BasicPlot(data=ci,x=x).error_band(y_up='mean_ci_upper',y_down='mean_ci_lower',opacity=0.3)
-    return ci_interval

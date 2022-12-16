@@ -1,11 +1,9 @@
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
-from patsy import dmatrices
 import altair as alt
 
 from .basic import BasicPlot
-from ..model.builder.cr_builder import CentralRegBuilder
 
 def basic_reg(
     data            : pd.DataFrame,
@@ -19,7 +17,6 @@ def basic_reg(
     show_stats_info : bool  = True,
     qr_quantile     : float = 0.5
 ) -> alt.Chart:
-    ...
     # reg_method OLS / QR
     #   OLS        y = a + b * x
     #   OLS_log    y = a + b * log(x)
@@ -41,18 +38,24 @@ def basic_reg(
     else:
         raise Exception('reg_method must in ["OLS","QR"]')
     
-    mod_data = mod_result.get_prediction(data).summary_frame()
-    mod_data[x] = data.loc[:,x]
+    x_max = data.loc[:,x].max()
+    x_min = data.loc[:,x].min()
+    X = pd.DataFrame(data={x:np.linspace(x_min,x_max,num=200)})
+    
+    mod_data = mod_result.get_prediction(X).summary_frame()
+    mod_data[x] = X.loc[:,x].to_numpy()
     
     basic_plot = BasicPlot(data=mod_data,x=x,y='mean')
-    plot = basic_plot.line(y_title=y,x_title=x)
+    plot = basic_plot.set_attr('color','#3366FF').line(y_title=y,x_title=x)
     
-    if ci_level is not None or pi_level is not None:
-        if pi_level is not None:
-            y_up,y_down = 'obs_ci_upper','obs_ci_lower'
-        else:
-            y_up,y_down = 'mean_ci_upper','mean_ci_lower'
-        band = basic_plot.error_band(y_up=y_up,y_down=y_down)
+    if ci_level is not None:
+        y_up,y_down = 'mean_ci_upper','mean_ci_lower'
+        band = basic_plot.set_attr('color','grey60').error_band(y_up=y_up,y_down=y_down)
+        plot = band + plot
+    
+    if pi_level is not None:
+        y_up,y_down = 'obs_ci_upper','obs_ci_lower'
+        band = basic_plot.set_attr('color','grey60').error_band(y_up=y_up,y_down=y_down)
         plot = band + plot
     
     return plot
