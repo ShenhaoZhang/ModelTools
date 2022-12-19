@@ -1,3 +1,5 @@
+from typing import Union
+
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline 
 from sklearn.model_selection import (
@@ -21,17 +23,20 @@ class BaseBuilder:
         self.cv_split   = cv_split
         self.cv_shuffle = cv_shuffle
         self.cv_score   = cv_score
-
         self.preprocess = None
         self.param      = None
         self.model      = None
         self.struct     = None
-        
         self.cv    = self.get_cv(self.cv_method,self.cv_split,self.cv_shuffle)
         self.score = self.get_cv_score(self.cv_score)
+        
     
     @staticmethod
-    def get_cv(cv_method,cv_split,cv_shuffle):
+    def get_cv(
+        cv_method : str,
+        cv_split  : int,
+        cv_shuffle: bool
+    ) -> Union[TimeSeriesSplit,KFold]:
         if cv_method == 'ts':
             cv = TimeSeriesSplit(n_splits=cv_split)
         elif cv_method == 'kfold':
@@ -39,12 +44,6 @@ class BaseBuilder:
             cv = KFold(n_splits=cv_split,shuffle=cv_shuffle,random_state=cv_random_state)
         return cv 
     
-    @staticmethod
-    def get_cv_score(score_name):
-        score = {}
-        score = score.get(score_name)
-        return score
-
     @classmethod
     def translate_struct(cls,struct):
         struct_decomp   = struct.split('_')

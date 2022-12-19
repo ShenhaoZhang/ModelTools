@@ -50,12 +50,12 @@ def basic_reg(
     
     if ci_level is not None:
         y_up,y_down = 'mean_ci_upper','mean_ci_lower'
-        band = basic_plot.set_attr('color','grey60').error_band(y_up=y_up,y_down=y_down)
+        band = basic_plot.set_attr('color','grey60').error_band(y_up=y_up,y_down=y_down,opacity=0.4)
         plot = band + plot
     
     if pi_level is not None:
         y_up,y_down = 'obs_ci_upper','obs_ci_lower'
-        band = basic_plot.set_attr('color','grey60').error_band(y_up=y_up,y_down=y_down)
+        band = basic_plot.set_attr('color','grey60').error_band(y_up=y_up,y_down=y_down,opacity=0.4)
         plot = band + plot
     
     return plot

@@ -1,11 +1,14 @@
 from pandas import DataFrame
 import altair as alt
-from .basic import BasicPlot
+
+from .basic.basic import BasicPlot
+# from .utils.add_vh_abline import plot_add_vh_abline
 
 def ts_line(
     data        : DataFrame,
     x           : str,
     y           : list,
+    y_title             = alt.Undefined,
     fig_width   : int   = 1000,
     fig_height  : int   = None,
     scales      : str   = 'fixed',
@@ -32,26 +35,30 @@ def ts_line(
     plot = alt.vconcat()
     selection = alt.selection_interval(encodings=['x'],empty='none')
     for y_name in y:
+        base.set_attr('y',y_name)
+        base.set_attr('title',y_name)
+        base.set_attr('figure_size',[line_width,line_height])
+        plot_line = base.line(
+            y_lim        = y_lim,
+            select       = selection,
+            color_by     = color_by,
+            color_legend = color_legend,
+            y_title      = y_title
+        )
+        
         if add_focus:
-            base.set_attr('y',y_name)
-            base.set_attr('figure_size',[line_width,line_height])
-            plot_line = base.line(
-                y_lim        = y_lim,
-                select       = selection,
-                color_by     = color_by,
-                color_legend = color_legend
-            )
-            
             base.set_attr('figure_size',[focus_width,line_height])
             plot_focus = base.line(
                 y_lim        = alt.Undefined,
                 filter       = selection,
                 color_by     = color_by,
-                color_legend = color_legend
+                color_legend = color_legend,
+                y_title      = y_title
             )
             plot_row = plot_line | plot_focus
         else:
-            plot_row = base.set_attr('y',y_name).line(y_lim=y_lim,color_by=color_by,color_legend=color_legend)
+            plot_row = plot_line
+        
         plot = plot & plot_row
     
     return plot

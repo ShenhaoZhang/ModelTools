@@ -264,22 +264,8 @@ class BaseModel:
             )
             
         # 打印结果
-        # TODO 做成方法 独立出来
         if print_result == True:
-            best_model_metric = pd.concat([
-                self.MetricTrain.get_metric().loc[[self.best_model_name]],
-                self.MetricTest.get_metric().loc[[self.best_model_name]]
-            ])
-            best_model_metric.index = ['Train','Test']
-            #TODO 去掉前缀
-            best_model_param = ', '.join([f'{param_name}={param_value}' for param_name,param_value in self.best_model_param.items()])
-            message = (
-                f"Best Model(CV)   : {self.best_model_name} ({self.cv_score.upper()}) \n"
-                f"Hyperparameters  : {best_model_param} \n"
-                f"Train Test Split : test_size={self.split_test_size}, shuffle={self.split_shuffle}, random_state=0 \n"
-                f"Cross Validation : {str(self._builder.cv)} \n \n"
-                f"{tabulate(best_model_metric.round(4),headers=best_model_metric.columns)} \n \n"
-            )
+            message = self.__get_result_message(type='train_test')
             print(message)
         
         return self
@@ -312,12 +298,7 @@ class BaseModel:
             )
         
         if print_result:
-            final_model_matric = self.MetricFinal.get_metric().round(4)
-            final_model_matric.index = ['Train & Test']
-            message = (
-                f'Final Model : {self.final_model_name} \n'
-                f"{tabulate(final_model_matric,headers=final_model_matric.columns)}"
-            )
+            message = self.__get_result_message(type='final')
             print(message)
         
         return self
@@ -404,7 +385,7 @@ class BaseModel:
             score = Novelty(train_x=self.train_x,test_x=self.test_x).get_score(method=method)
             std_resid = self.best_model_test_resid / np.std(self.best_model_test_resid)
             abs_std_resid = np.abs(std_resid)
-            # train_mae = self.MetricTrain.get_metric().at[self.best_model_name,'MAE']
+            # train_mae = self.MetricTrain.get_metric(style_metric=False).at[self.best_model_name,'MAE']
         
         # 当输入new_data时，基于整个数据集data检查new_data
         elif new_data is not None:
@@ -412,16 +393,17 @@ class BaseModel:
             score = Novelty(train_x=self.data.loc[:,self.col_x],test_x=new_data.loc[:,self.col_x]).get_score(method=method)
             resid = new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x])
             abs_std_resid = np.abs(resid / np.std(resid))
-            # train_mae = self.MetricFinal.get_metric().at[self.final_model_name,'MAE']
+            # train_mae = self.MetricFinal.get_metric(style_metric=False).at[self.final_model_name,'MAE']
         
         if not return_score:
             data = pd.DataFrame({'score' : score, 'abs_std_residual': abs_std_resid })
             plot = corr_scatter(
-                data          = data,
-                x             = 'score',
-                y             = 'abs_std_residual',
-                smooth_method = 'qr',
-                qr_quantile   = 0.95,
+                data            = data,
+                x               = 'score',
+                y               = 'abs_std_residual',
+                reg_method      = 'qr',
+                reg_formula     = 'y~x',
+                reg_qr_quantile = 0.95,
                 # h_line        = {'Train_MAE':train_mae},
             )
             return plot
@@ -438,3 +420,29 @@ class BaseModel:
         elif type == 'train':
             if self.best_model_name is None:
                 raise Exception('模型需要先fit')
+    
+    def __get_result_message(self,type):
+        if type == 'train_test':
+            model_metric = pd.concat([
+                self.MetricTrain.get_metric(style_metric=False).loc[[self.best_model_name]],
+                self.MetricTest.get_metric(style_metric=False).loc[[self.best_model_name]]
+            ])
+            model_metric.index = ['Train','Test']
+            best_model_param = ', '.join([f'{param_name}={param_value}' for param_name,param_value in self.best_model_param.items()])
+            message = (
+                f"Best Model(CV)   : {self.best_model_name} ({self.cv_score.upper()}) \n"
+                f"Hyperparameters  : {best_model_param} \n"
+                f"Train Test Split : test_size={self.split_test_size}, shuffle={self.split_shuffle}, random_state=0 \n"
+                f"Cross Validation : {str(self._builder.cv)} \n \n"
+                f"{tabulate(model_metric.round(4),headers=model_metric.columns)} \n \n"
+            )
+            
+        elif type == 'final':
+            model_matric = self.MetricFinal.get_metric(style_metric=False).round(4)
+            model_matric.index = ['Train & Test']
+            message = (
+                f'Final Model : {self.final_model_name} \n'
+                f"{tabulate(model_matric,headers=model_matric.columns)}"
+            )
+        
+        return message

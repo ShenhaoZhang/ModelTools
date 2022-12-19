@@ -100,8 +100,11 @@ class BasicPlot:
         self.__check_param('x')
         x = self.__choose_param(x)
         
+        axis_label_angle = 90 if rotate else alt.Undefined
+        
         X = alt.X(x,type='quantitative',title=x_title)
-        Y = alt.Y('density',type='quantitative',title=y_title)
+        Y = alt.Y('density',type='quantitative',title=y_title,
+                  axis=alt.Axis(labelAngle=axis_label_angle))
         if rotate is True:
             X,Y = Y,X
              
@@ -146,12 +149,19 @@ class BasicPlot:
         return plot
     
     @__set_figure
-    def abline(self,slope=None,intercept=None,name=None,name_position='right'):
+    def abline(
+        self,
+        slope         = None,
+        intercept     = None,
+        storkeDash    = alt.Undefined,
+        name          = None,
+        name_position = 'right'
+    ):
         # 水平线
         if slope == 0 and intercept is not None:
             plot = (
                 self.base
-                .mark_rule(strokeDash=[12, 6],size=1,color=self.color)
+                .mark_rule(strokeDash=storkeDash,size=1,color=self.color)
                 .encode(y=alt.datum(intercept))
             )
             if name is not None:
@@ -173,7 +183,7 @@ class BasicPlot:
         elif slope is None and intercept is not None:
             plot = (
                 self.base
-                .mark_rule(strokeDash=[12, 6],size=1,color=self.color)
+                .mark_rule(strokeDash=storkeDash,size=1,color=self.color)
                 .encode(x=alt.datum(intercept))
             )
         
@@ -184,7 +194,7 @@ class BasicPlot:
             plot = (
                 self.base
                 .transform_calculate(as_='cal_y',calculate=f'datum.{self.x}*{slope}+{intercept}')
-                .mark_line(color=self.color)
+                .mark_line(color=self.color,strokeDash=storkeDash)
                 .encode(
                     x = alt.X(self.x),
                     y = alt.Y('cal_y',type='quantitative',title=self.y)

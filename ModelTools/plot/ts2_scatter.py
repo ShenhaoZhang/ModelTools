@@ -1,6 +1,6 @@
 from typing import Union
 
-from .basic import BasicPlot
+from .basic.basic import BasicPlot
 
 def ts2_scatter(
     data,

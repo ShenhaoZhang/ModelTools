@@ -1,10 +1,8 @@
 from pandas import DataFrame
-from typing import Union
 import altair as alt
-import statsmodels.api as sm 
 
-from .basic import BasicPlot
-from .basic_reg import basic_reg
+from .basic.basic import BasicPlot
+from .basic.basic_reg import basic_reg
 
 def corr_scatter(
     data           : DataFrame,

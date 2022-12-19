@@ -20,74 +20,72 @@ class BaseMetric:
         index_freq : str              = None,
         highlight  : dict             = None
     ) -> None:
-        self.y_true    = np.array(y_true)
-        self.y_pred    = y_pred if isinstance(y_pred,list) else [y_pred]
-        self.y_pred    = [np.array(pred) for pred in self.y_pred]
-        self.sample_n  = len(self.y_true)
-        self.y_pred_n  = len(self.y_pred)
         
+        self.y_true        = np.array(y_true)
+        self.y_pred        = y_pred if isinstance(y_pred,list) else [y_pred]
+        self.y_pred        = [np.array(pred) for pred in self.y_pred]
+        self.__y_pred_name = y_pred_name if isinstance(y_pred_name,list) else [y_pred_name]
+        self.sample_n      = len(self.y_true)
+        self.y_pred_n      = len(self.y_pred)
+        self.y_name        = y_name
+        self.highlight     = {} if highlight is None else highlight
+        self.index         = index
+        self.index_freq    = index_freq
+        self.__init_input()
+        
+        self.resid           = [self.y_true-pred for pred in self.y_pred]
+        
+        self.data = None
+        self.__init_data()
+    
+    def __init_input(self):
         # 真实值与预测值的的长度校验
         for pred in self.y_pred:
-            if len(pred) != len(y_true):
+            if len(pred) != len(self.y_true):
                 raise ValueError('WRONG')
             if np.isnan(pred).any():
                 raise ValueError('WRONG')
         # 预测值名称的长度校验
-        self.y_pred_name = y_pred_name if isinstance(y_pred_name,list) else [y_pred_name]
-        if (y_pred_name is not None) and (len(self.y_pred) != len(self.y_pred_name)):
+        if (self.__y_pred_name is not None) and (len(self.y_pred) != len(self.__y_pred_name)):
             raise Exception('Wrong')
-        self.highlight = {} if highlight is None else highlight
-        
-        self.y_name       = y_name
-        self.y_pred_name  = [f'Pred_{y_name}_{i}' for i in range(self.y_pred_n)] if y_pred_name is None else [f'Pred_{name}' for name in y_pred_name]
-        self.resid_name   = [f'Resid_{self.y_name}_{i}' for i in range(self.y_pred_n)] if y_pred_name is None else [f'Resid_{name}' for name in y_pred_name]
-        self.outlier_name = [f'Outlier_{self.y_name}_{i}' for i in range(self.y_pred_n)] if y_pred_name is None else [f'Outlier_{name}' for name in y_pred_name]
-        
+
         # 当索引不为None时的校验
-        if index is not None:
-            if not isinstance(index,pd.DatetimeIndex):
+        if self.index is not None:
+            if not isinstance(self.index,pd.DatetimeIndex):
                 try:
-                    index = pd.DatetimeIndex(index)
+                    self.index = pd.DatetimeIndex(self.index)
                 except Exception as E:
                     print(E)
                     raise TypeError('WRONG')
-            if index_freq is None:
+            if self.index_freq is None:
                 raise ValueError('WRONG')
-            if len(index) != len(y_true):
+            if len(self.index) != len(self.y_true):
                 raise ValueError('WRONG')
-        self.index       = np.arange(self.sample_n) if index is None else index
-        self.index_freq  = index_freq
-        
-        # 限定评估的数量
-        highlight_count = len(self.highlight)
-        if highlight_count >= 6:
-            self.highlight_y = list(self.highlight.keys())
         else:
-            top_metric_count = 6 - highlight_count
-            top_metric = (
-                self.get_metric()
-                .drop(list(self.highlight.keys()))
-                # .sort_values(by='MSE')
-                .head(top_metric_count)
-                .index.to_list()
-            )
-            self.highlight_y = list(self.highlight.keys()) + top_metric
+            self.index = np.arange(self.sample_n)
         
-        self.data = None
-        self._init_outlier()
-        self._init_data()
+        self.y_pred_name = []
+        self.resid_name = []
+        self.outlier_name = []
+        for i,name in enumerate(self.__y_pred_name):
+            if name is None:
+                self.y_pred_name.append(f'Pred_{self.y_name}_{i}')
+                self.resid_name.append(f'Resid_{self.y_name}_{i}')
+                self.outlier_name.append(f'Outlier_{self.y_name}_{i}')
+            else:
+                self.y_pred_name.append(f'Pred_{name}')
+                self.resid_name.append(f'Resid_{name}')
+                self.outlier_name.append(f'Outlier_{name}')
+    
         
-    def _init_outlier(self):
-        pass
-        
-    def _init_data(self,contain_resid=True):
+    def __init_data(self,contain_resid=True):
         
         data      = [self.index, self.y_true, *self.y_pred]
         index     = ['Time',f'True_{self.y_name}', *self.y_pred_name]
         stubnames = ['Pred']
         if contain_resid:
-            data      += [*self.resid, *self.outlier_index]
-            index     += [*self.resid_name, *self.outlier_name]
+            data      += [*self.resid]
+            index     += [*self.resid_name]
             stubnames += ['Resid','Outlier']
         
         self.data = (
@@ -103,7 +101,6 @@ class BaseMetric:
             )
             .reset_index()
             .infer_objects()
-            .assign(Highlight = lambda dt:dt.Method.map(self.highlight))
         )
         
         # 时间索引填充空缺值
@@ -115,23 +112,37 @@ class BaseMetric:
                 names=['Time','Method']
             )
             self.data = self.data.set_index(['Time','Method']).reindex(complete_index).reset_index()
-        
-    def get_metric(self):
-        pass
+    
+    def get_metric(self,type='eval',add_highlight_col=False,style_metric=True):
+        metric = self.metric(type)
+        if add_highlight_col:
+            metric = metric.assign(Highlight = lambda dt:dt.index.map(self.highlight)).fillna({'Highlight':'Others'})
+        if style_metric:
+            metric = metric.style.apply(lambda sr:self.style_metric(sr))
+        return metric
     
     def plot_metric_scatter(self,type='bv'):
-        
         #TODO 处理异常大的值导致的可视化问题
         if type in ['bv','bv_robust']:
-            metric = self.get_metric(type = 'resid', add_highlight_col = True)
+            metric = self.get_metric(type = 'resid', add_highlight_col = True,style_metric=False)
             plot = plot_alt.plot_metric_bias_var(data = metric, type = type)
         elif type == 'pca':
-            metric = self.get_metric(type = 'eval', add_highlight_col = False)
+            metric = self.get_metric(type = 'eval', add_highlight_col = False,style_metric=False)
             plot = Pca(data = metric,scale = True).plot_bio(highlight = self.highlight)
-            
         return plot
     
     #TODO 分块可视化metric变化的趋势
     def plot_metric_trend(self):
         ...
     
+    @staticmethod    
+    def style_metric(sr:pd.Series):
+        sr_up = sr.quantile(q=0.8)
+        sr_dw = sr.quantile(q=0.2)
+        if sr.name in ['R2','D2']:
+            style = np.where(sr>sr_up,'color: red;','opacity: 20%;')
+            style = np.where(sr<sr_dw,'color:green',style)
+        else:
+            style = np.where(sr<sr_dw,'color: red;','opacity: 20%;')
+            style = np.where(sr>sr_up,'color:green',style)
+        return style

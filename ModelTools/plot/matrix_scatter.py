@@ -1,6 +1,6 @@
 from pandas import DataFrame
 import altair as alt
-from .basic import BasicPlot
+from .basic.basic import BasicPlot
 
 def matrix_scatter(
     data      : DataFrame,
