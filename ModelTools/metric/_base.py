@@ -51,6 +51,7 @@ class BaseMetric:
 
         # 当索引不为None时的校验
         if self.index is not None:
+            self.index_name = 'datetime'
             if not isinstance(self.index,pd.DatetimeIndex):
                 try:
                     self.index = pd.DatetimeIndex(self.index)
@@ -62,6 +63,7 @@ class BaseMetric:
             if len(self.index) != len(self.y_true):
                 raise ValueError('WRONG')
         else:
+            self.index_name = 'sample_order'
             self.index = np.arange(self.sample_n)
         
         self.y_pred_name = []

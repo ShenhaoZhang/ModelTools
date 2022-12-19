@@ -41,7 +41,7 @@ class BasicPlot:
         return set_fig
     
     @__set_figure
-    def scatter(self):
+    def scatter(self,x_lim=alt.Undefined,y_lim=alt.Undefined):
         self.__check_param(type='xy')
         
         plot = (
@@ -52,12 +52,12 @@ class BasicPlot:
             .encode(
                 x = alt.X(
                     self.x,
-                    scale=alt.Scale(zero=False),
+                    scale=alt.Scale(zero=False,domain=x_lim),
                     type='quantitative'
                 ),
                 y = alt.Y(
                     self.y,
-                    scale=alt.Scale(zero=False),
+                    scale=alt.Scale(zero=False,domain=y_lim),
                     type='quantitative'
                 )
             )
@@ -155,7 +155,9 @@ class BasicPlot:
         intercept     = None,
         storkeDash    = alt.Undefined,
         name          = None,
-        name_position = 'right'
+        name_position = 'right',
+        x_lim = alt.Undefined,
+        y_lim = alt.Undefined
     ):
         # 水平线
         if slope == 0 and intercept is not None:
@@ -196,8 +198,9 @@ class BasicPlot:
                 .transform_calculate(as_='cal_y',calculate=f'datum.{self.x}*{slope}+{intercept}')
                 .mark_line(color=self.color,strokeDash=storkeDash)
                 .encode(
-                    x = alt.X(self.x),
-                    y = alt.Y('cal_y',type='quantitative',title=self.y)
+                    x = alt.X(self.x,scale=alt.Scale(domain=x_lim)),
+                    y = alt.Y('cal_y',type='quantitative',title=self.y,
+                              scale=alt.Scale(domain=y_lim))
                 )
             )
         return plot

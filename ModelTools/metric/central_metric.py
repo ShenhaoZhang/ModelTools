@@ -7,6 +7,7 @@ from ..plot import plot_gg
 from ..plot import plot_alt
 from ._base import BaseMetric
 from ..plot.ts_line import ts_line
+from ..plot.matrix_scatter import matrix_scatter_wrap
 
 class CentralMetric(BaseMetric):
     def __init__(
@@ -73,15 +74,25 @@ class CentralMetric(BaseMetric):
         add_outlier=False, 
         add_quantile=False, 
         figure_size=(10, 5), 
-        scales='fixed', 
+        scales='free', 
     ):
         show_metric = show_metric if show_metric is not None else self.plot_show_metric
-        plot_data = self.data.loc[lambda dt:dt.Method.isin(show_metric)]
+        plot_data = (
+            self.data
+            .loc[lambda dt:dt.Method.isin(show_metric)]
+            .pivot(index='Time',columns='Method',values=['Pred',f'True_{self.y_name}'])
+        )
+        plot_data.columns = plot_data.columns.map('_'.join)
+        pred_col = plot_data.columns[plot_data.columns.str.contains('Pred')]
+        true_col = plot_data.columns[plot_data.columns.str.contains('True')]
         
-        plot = plot_alt.plot_TvP(
-            data   = plot_data,
-            y_name = self.y_name,
-            scales = scales
+        plot = matrix_scatter_wrap(
+            data=plot_data,
+            y=pred_col,
+            x=true_col,
+            diag_line=True,
+            scales=scales,
+            n_col=3
         )
         return plot
     
@@ -105,6 +116,7 @@ class CentralMetric(BaseMetric):
         plot = ts_line(
             data         = plot_data,
             x            = 'Time',
+            x_title      = self.index_name,
             y            = show_metric,
             color_by     = 'variable',
             add_focus    = add_focus,
@@ -136,6 +148,7 @@ class CentralMetric(BaseMetric):
         plot = ts_line(
             data         = plot_data,
             x            = 'Time',
+            x_title      = self.index_name,
             y            = show_metric,
             add_focus    = add_focus,
             scales       = scales,

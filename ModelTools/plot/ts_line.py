@@ -8,6 +8,7 @@ def ts_line(
     data        : DataFrame,
     x           : str,
     y           : list,
+    x_title             = alt.Undefined,
     y_title             = alt.Undefined,
     fig_width   : int   = 1000,
     fig_height  : int   = None,
@@ -43,7 +44,8 @@ def ts_line(
             select       = selection,
             color_by     = color_by,
             color_legend = color_legend,
-            y_title      = y_title
+            y_title      = y_title,
+            x_title      = x_title
         )
         
         if add_focus:
@@ -53,7 +55,8 @@ def ts_line(
                 filter       = selection,
                 color_by     = color_by,
                 color_legend = color_legend,
-                y_title      = y_title
+                y_title      = y_title,
+                x_title      = x_title
             )
             plot_row = plot_line | plot_focus
         else:

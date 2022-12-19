@@ -235,12 +235,18 @@ class BaseModel:
         self.best_model_param      = self.all_param.get(self.best_model_name)
         self.best_model_test_resid = self.test_y.to_numpy() - self.best_model.predict(self.test_x)
         
+        if self.col_ts is None or self.split_shuffle == True:
+            index_train = None
+            index_test = None
+        else:
+            index_train = self.train_data.loc[:,self.col_ts]
+            index_test = self.test_data.loc[:,self.col_ts]
         # 各个模型在训练集上的效果评估
         self.MetricTrain = self._metric(
             y_true      = self.train_y.to_numpy(),
             y_pred      = list(self.all_train_predict.values()),
             y_pred_name = list(self.all_train_predict.keys()),
-            index       = None if self.col_ts is None else self.train_data.loc[:,self.col_ts],
+            index       = index_train,
             index_freq  = self.ts_freq, 
             highlight   = {self.best_model_name:'Best_Model(CV)'},
             **self._metric_kwargs
@@ -251,7 +257,7 @@ class BaseModel:
             y_true      = self.test_y.to_numpy(),
             y_pred      = list(self.all_test_predict.values()),
             y_pred_name = list(self.all_test_predict.keys()),
-            index       = None if self.col_ts is None else self.test_data.loc[:,self.col_ts],
+            index       = index_test,
             index_freq  = self.ts_freq, 
             highlight   = {self.best_model_name:'Best_Model(CV)'},
             **self._metric_kwargs

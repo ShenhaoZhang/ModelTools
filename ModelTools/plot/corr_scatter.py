@@ -8,11 +8,6 @@ def corr_scatter(
     data           : DataFrame,
     x              : str,
     y              : str,
-    fig_width      : int   = 600,
-    fig_height     : int   = 400,
-    lab_x          : str   = None,
-    lab_y          : str   = None,
-    lab_title      : str   = None,
     geom_dist      : str   = 'density',
     reg_formula    : str   = 'y~x',
     reg_method     : str   = None,
@@ -22,7 +17,13 @@ def corr_scatter(
     stats_info     : bool  = True,
     v_line         : dict  = None,
     h_line         : dict  = None,
-    v_line_pos     : str   = 'left'
+    v_line_pos     : str   = 'left',
+    diag_line      : bool  = False,
+    lab_x          : str   = None,
+    lab_y          : str   = None,
+    lab_title      : str   = None,
+    fig_width      : int   = 600,
+    fig_height     : int   = 400,
 ):
     
     # 标签
@@ -51,30 +52,6 @@ def corr_scatter(
         .set_attr('figure_size',[scatter_width,scatter_height])
         .scatter()
     )
-    
-    # 分布图
-    if geom_dist == 'density':
-        dist_up = (
-            basic
-            .set_attr('figure_size',[dist_up_width,dist_up_height])
-            .density(x=x,x_title=None,y_title=None)
-        )
-        dist_rt = (
-            basic
-            .set_attr('figure_size',[dist_rt_width,dist_rt_height])
-            .density(x=y,rotate=True,x_title=None,y_title=None)
-        )
-    elif geom_dist == 'hist':
-        dist_up = (
-            basic
-            .set_attr('figure_size',[dist_up_width,dist_up_height])
-            .hist(x=x,x_title=None,y_title=None)
-        )
-        dist_rt = (
-            basic
-            .set_attr('figure_size',[dist_rt_width,dist_rt_height])
-            .hist(x=y,rotate=True,x_title=None,y_title=None)
-        )
     
     # 回归曲线及置信区间
     if isinstance(reg_qr_quantile,list) and reg_method == 'qr':
@@ -114,7 +91,40 @@ def corr_scatter(
         for name,value in h_line.items():
             scatter += basic.set_attr('color','black').abline(slope=0,intercept=value,name=name,name_position=v_line_pos)
     
-    plot = dist_up & (scatter | dist_rt)
+    if diag_line == True:
+        scatter += basic.set_attr('color','red').abline(slope=1,intercept=0)
+    
+    # 分布图
+    if geom_dist is not None:
+        basic.set_attr('color','black')
+        if geom_dist == 'density':
+            dist_up = (
+                basic
+                .set_attr('figure_size',[dist_up_width,dist_up_height])
+                .density(x=x,x_title=None,y_title=None)
+            )
+            dist_rt = (
+                basic
+                .set_attr('figure_size',[dist_rt_width,dist_rt_height])
+                .density(x=y,rotate=True,x_title=None,y_title=None)
+            )
+        elif geom_dist == 'hist':
+            dist_up = (
+                basic
+                .set_attr('figure_size',[dist_up_width,dist_up_height])
+                .hist(x=x,x_title=None,y_title=None)
+            )
+            dist_rt = (
+                basic
+                .set_attr('figure_size',[dist_rt_width,dist_rt_height])
+                .hist(x=y,rotate=True,x_title=None,y_title=None)
+            )
+        else:
+            raise Exception('Wrong geom_dist')
+        plot = dist_up & (scatter | dist_rt)
+    elif geom_dist is None:
+        plot = scatter
+        
     plot = (
         plot
         # .properties(
