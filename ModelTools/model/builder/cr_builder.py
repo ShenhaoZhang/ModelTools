@@ -9,8 +9,8 @@ from ._base import BaseBuilder
 
 class CentralRegBuilder(BaseBuilder):
     
-    def __init__(self, cv_method, cv_split, cv_shuffle, cv_score:str = 'mse') -> None:
-        super().__init__(cv_method, cv_split, cv_shuffle, cv_score)
+    def __init__(self, cv_method, cv_split, cv_shuffle, cv_score:str = 'mse',param_type:str = 'fast') -> None:
+        super().__init__(cv_method, cv_split, cv_shuffle, cv_score, param_type)
         
         self.preprocess = {
             'std'  : pr.StandardScaler(),
@@ -18,23 +18,31 @@ class CentralRegBuilder(BaseBuilder):
             'inter': pr.PolynomialFeatures(interaction_only=True),
             'sp'   : pr.SplineTransformer()
         }
-        self.param = {
+        self.param_fast = {
             'poly__degree'         : [2,3,4],
-            'inter__degree'        : [1,2,3],
+            'inter__degree'        : [2,3],
             'sp__extrapolation'    : ['constant','continue','linear'],
             'sp__knots'            : ['uniform','quantile'],
             'EN__l1_ratio'         : [.1,.5,.7,.9,.95,.99,1],
+            'HUBER__alpha'         : [0.0001],
+            'HUBER__epsilon'       : [1.35],
             'DT__max_depth'        : [2,4,6,8,10],
             'DT__min_samples_split': [5,30,90,200],
             'RF__max_features'     : [1,'sqrt'],
         }
         
+        self.param_complete = self.param_fast.copy()
+        self.param_complete.update({
+            'inter__degree' : [2,3,4],
+            'HUBER__alpha'  : [0.0001,0.001,0.01,0.1,1,10,100],
+            'HUBER__epsilon': [1,1.05,1.1,1.15,1.2,1.25,1.3,1.35],
+        })
+        
         self.model = {
             'OLS'  : lm.LinearRegression(), 
             'LAR'  : lm.Lars(normalize=False),
-            'HUBER': lm.HuberRegressor(),
+            'HUBER': lm.HuberRegressor(max_iter=200),
             'EN'   : lm.ElasticNet(random_state=0),
-            # 'QR'   : lm.QuantileRegressor(solver='highs',quantile=0.5,alpha=0),  #TODO 条件alpha
             'BR'   : lm.BayesianRidge(),
             'DT'   : tree.DecisionTreeRegressor(random_state=0),
             'RF'   : en.RandomForestRegressor(random_state=0),

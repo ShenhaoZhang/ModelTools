@@ -113,12 +113,12 @@ class BaseMetric:
             )
             self.data = self.data.set_index(['Time','Method']).reindex(complete_index).reset_index()
     
-    def get_metric(self,type='eval',add_highlight_col=False,style_metric=True):
+    def get_metric(self,type='eval',style_metric=True,style_threshold=0.8,add_highlight_col=False):
         metric = self.metric(type)
         if add_highlight_col:
             metric = metric.assign(Highlight = lambda dt:dt.index.map(self.highlight)).fillna({'Highlight':'Others'})
         if style_metric:
-            metric = metric.style.apply(lambda sr:self.style_metric(sr))
+            metric = self.style_metric(metric=metric,threshold=style_threshold)
         return metric
     
     def plot_metric_scatter(self,type='bv'):
@@ -136,13 +136,24 @@ class BaseMetric:
         ...
     
     @staticmethod    
-    def style_metric(sr:pd.Series):
-        sr_up = sr.quantile(q=0.8)
-        sr_dw = sr.quantile(q=0.2)
-        if sr.name in ['R2','D2']:
+    def style_metric(metric:pd.DataFrame,threshold=0.8,up=None,dw=None):
+        def style(sr:pd.Series):
+            if sr.name in ['R2','D2']:
+                sr = sr
+            elif sr.name in ['MBE']:
+                sr = -abs(sr)
+            else:
+                sr = -sr
+            
+            if up is None and dw is None:
+                sr_up = sr.quantile(q=threshold)
+                sr_dw = sr.quantile(q=1-threshold)
+            else:
+                sr_up=up
+                sr_dw=dw
+            
             style = np.where(sr>sr_up,'color: red;','opacity: 20%;')
             style = np.where(sr<sr_dw,'color:green',style)
-        else:
-            style = np.where(sr<sr_dw,'color: red;','opacity: 20%;')
-            style = np.where(sr>sr_up,'color:green',style)
-        return style
+            return style
+        metric = metric.style.apply(lambda sr:style(sr))
+        return metric

@@ -31,7 +31,8 @@ class BaseModel:
         cv_split       :int   = 5,
         cv_shuffle     :bool  = False,
         cv_score       :str   = 'mse',
-        exp_model      :bool  = True
+        exp_model      :bool  = True,
+        param_type     :str   = 'fast'
     ) -> None:
         
         self.data            = data
@@ -46,6 +47,7 @@ class BaseModel:
         self.ts_freq         = ts_freq
         self.split_test_size = split_test_size
         self.split_shuffle   = split_shuffle
+        self.param_type      = param_type
         
         self.all_model         = {}  # 每个value都是GridSearchCV对象
         self.all_param         = {}
@@ -124,7 +126,8 @@ class BaseModel:
             cv_score   = self.cv_score,
             cv_method  = self.cv_method,
             cv_shuffle = self.cv_shuffle,
-            cv_split   = self.cv_split
+            cv_split   = self.cv_split,
+            param_type = self.param_type
         ) 
         
         self._metric = Metric
@@ -410,8 +413,15 @@ class BaseModel:
         elif return_score:
             return score
     
-    def compare_train_test_metric(self):
-        ...
+    def check_train_test_metric(self):
+        train_metric    = self.MetricTrain.get_metric(style_metric=False)
+        test_metric     = self.MetricTest.get_metric(style_metric=False)
+        test_growth_pct = test_metric-train_metric
+        if 'MBE' in test_metric.columns:
+            test_growth_pct = test_growth_pct.drop(['MBE'],axis=1)
+        test_growth_pct.columns.name = 'Test - Train'
+        metric = self._metric.style_metric(test_growth_pct)
+        return metric
         
     def __check_model_status(self,type='final'):
         if type == 'final':

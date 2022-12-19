@@ -26,7 +26,7 @@ class QuantileRegBuilder(BaseBuilder):
             'inter': pr.PolynomialFeatures(interaction_only=True),
             'sp'   : pr.SplineTransformer()
         }
-        self.param = {
+        self.param_fast = {
             'poly__degree'         : [2,3,4],
             'inter__degree'        : [1,2,3],
             'sp__extrapolation'    : ['constant','continue','linear'],
@@ -37,6 +37,7 @@ class QuantileRegBuilder(BaseBuilder):
             'GB__min_samples_leaf' : [1, 5, 10, 20],
             'GB__min_samples_split': [5, 10, 20, 30, 50]
         }
+        self.param_complete = self.param_fast
 
         self.model = {
             'QR' : QuantileRegressor(solver='highs',quantile=self.quantile),

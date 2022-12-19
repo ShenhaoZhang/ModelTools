@@ -17,19 +17,20 @@ class BaseBuilder:
         cv_split,
         cv_shuffle,
         cv_score:str,
+        param_type:str
     ) -> None:
 
         self.cv_method  = cv_method
         self.cv_split   = cv_split
         self.cv_shuffle = cv_shuffle
         self.cv_score   = cv_score
+        self.param_type = param_type
         self.preprocess = None
         self.param      = None
         self.model      = None
         self.struct     = None
         self.cv    = self.get_cv(self.cv_method,self.cv_split,self.cv_shuffle)
         self.score = self.get_cv_score(self.cv_score)
-        
     
     @staticmethod
     def get_cv(
@@ -69,6 +70,7 @@ class BaseBuilder:
         return pipe
 
     def struct_to_param(self,struct) -> dict:
+        self.param = self.param_fast if self.param_type == 'fast' else self.param_complete
         preprocess_name, model_name = self.translate_struct(struct)
         # 生成参数网格
         # 输入指定超参数空间，替代默认值
