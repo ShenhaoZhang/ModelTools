@@ -42,7 +42,8 @@ class QuantileRegression(BaseModel):
             cv_method  = self.cv_method,
             cv_shuffle = self.cv_shuffle,
             cv_split   = self.cv_split,
-            quantile   = quantile
+            quantile   = quantile,
+            param_type = self.param_type
         ) 
         self._metric = QuantileMetric
         self._metric_kwargs = {'quantile':quantile}

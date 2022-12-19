@@ -374,13 +374,46 @@ class BaseModel:
             result = {'down':low,'high':high}
             
         return result
-            
-        
-        
-    def check_cv_split(self,plot=True):
-        # TODO 拟合的时间、预测效果、可视化
-        ...
     
+    def check_metric(self,type='cv',style_metric=True):
+        self.__check_model_status(type='train')
+        if type == 'cv':
+            result = {}
+            result['fit_time'] = {k:np.sum(v.get('mean_fit_time')) for k,v in self.all_cv_results.items()}
+            for i in range(self.cv_split):
+                result[f'split{i}_test_{self.cv_score.upper()}'] = {k:np.max(v.get(f'split{i}_test_score')) for k,v in self.all_cv_results.items()}
+            metric = pd.DataFrame(result).abs()
+            mean_score = metric.loc[:,lambda dt:dt.columns.str.contains(f'_test_{self.cv_score.upper()}')].mean(axis=1)
+            metric[f'mean_test_{self.cv_score.upper()}'] = mean_score
+            metric.columns.name = 'Type : CV'
+        
+        elif type == 'train':
+            metric = self.MetricTrain.get_metric(style_metric=False)
+            metric.columns.name = 'Type : Train'
+        
+        elif type == 'test':
+            metric = self.MetricTest.get_metric(style_metric=False)
+            metric.columns.name = 'Type : Test'
+        
+        elif type == 'test-train':
+            train_metric    = self.MetricTrain.get_metric(style_metric=False)
+            test_metric     = self.MetricTest.get_metric(style_metric=False)
+            metric = test_metric-train_metric
+            if 'MBE' in test_metric.columns:
+                metric = metric.drop(['MBE'],axis=1)
+            metric.columns.name = 'Type : Test - Train'
+        
+        elif type == 'final':
+            metric = self.MetricFinal.get_metric(style_metric=False)
+            metric.columns.name = 'Type : Final'
+        
+        metric = metric.reindex(list(self.all_cv_results.keys()),axis=0)    
+        if style_metric == True:
+            metric = metric.mask(lambda x:x>1e5,np.nan).round(4)
+            metric = self._metric.style_metric(metric)
+            
+        return metric
+            
     def check_novelty(self,method:str='gmm',new_data:pd.DataFrame=None,return_score:bool=False,**kwargs):
         # 当未输入new_data时，基于train_x检查test_x
         if new_data is None:
@@ -413,15 +446,7 @@ class BaseModel:
         elif return_score:
             return score
     
-    def check_train_test_metric(self):
-        train_metric    = self.MetricTrain.get_metric(style_metric=False)
-        test_metric     = self.MetricTest.get_metric(style_metric=False)
-        test_growth_pct = test_metric-train_metric
-        if 'MBE' in test_metric.columns:
-            test_growth_pct = test_growth_pct.drop(['MBE'],axis=1)
-        test_growth_pct.columns.name = 'Test - Train'
-        metric = self._metric.style_metric(test_growth_pct)
-        return metric
+    
         
     def __check_model_status(self,type='final'):
         if type == 'final':

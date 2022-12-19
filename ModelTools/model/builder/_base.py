@@ -106,7 +106,7 @@ class BaseBuilder:
             param_grid         = param_grid,
             refit              = True,
             cv                 = self.cv,
-            return_train_score = True,
+            return_train_score = False,
             n_jobs             = -1,
             scoring            = self.score
         )

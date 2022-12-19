@@ -33,7 +33,6 @@ class CentralRegBuilder(BaseBuilder):
         
         self.param_complete = self.param_fast.copy()
         self.param_complete.update({
-            'inter__degree' : [2,3,4],
             'HUBER__alpha'  : [0.0001,0.001,0.01,0.1,1,10,100],
             'HUBER__epsilon': [1,1.05,1.1,1.15,1.2,1.25,1.3,1.35],
         })
@@ -41,7 +40,7 @@ class CentralRegBuilder(BaseBuilder):
         self.model = {
             'OLS'  : lm.LinearRegression(), 
             'LAR'  : lm.Lars(normalize=False),
-            'HUBER': lm.HuberRegressor(max_iter=200),
+            'HUBER': lm.HuberRegressor(max_iter=100),
             'EN'   : lm.ElasticNet(random_state=0),
             'BR'   : lm.BayesianRidge(),
             'DT'   : tree.DecisionTreeRegressor(random_state=0),

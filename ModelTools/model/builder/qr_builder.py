@@ -15,9 +15,10 @@ class QuantileRegBuilder(BaseBuilder):
         cv_split, 
         cv_shuffle, 
         cv_score:str,
-        quantile:float
+        quantile:float,
+        param_type:str
     ) -> None:
-        super().__init__(cv_method, cv_split, cv_shuffle, cv_score)
+        super().__init__(cv_method, cv_split, cv_shuffle, cv_score, param_type)
         self.quantile = quantile
         
         self.preprocess = {
@@ -28,7 +29,7 @@ class QuantileRegBuilder(BaseBuilder):
         }
         self.param_fast = {
             'poly__degree'         : [2,3,4],
-            'inter__degree'        : [1,2,3],
+            'inter__degree'        : [2,3],
             'sp__extrapolation'    : ['constant','continue','linear'],
             'sp__knots'            : ['uniform','quantile'],
             'QR__alpha'            : [0,.1,.5,.7,.9,.95,.99,1],
@@ -37,7 +38,10 @@ class QuantileRegBuilder(BaseBuilder):
             'GB__min_samples_leaf' : [1, 5, 10, 20],
             'GB__min_samples_split': [5, 10, 20, 30, 50]
         }
-        self.param_complete = self.param_fast
+        self.param_complete = self.param_fast.copy()
+        self.param_complete = self.param_complete.update({
+            'inter__degree'        : [2,3], #TODO 占位
+        })
 
         self.model = {
             'QR' : QuantileRegressor(solver='highs',quantile=self.quantile),
