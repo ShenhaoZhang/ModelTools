@@ -4,6 +4,8 @@ import pandas as pd
 from sklearn.neighbors import LocalOutlierFactor
 from tqdm import tqdm
 
+from .mixture import Mixture
+
 class Novelty:
     #TODO 增加可视化分析 ts_scatter
     def __init__(self,train_x:pd.DataFrame,test_x:pd.DataFrame) -> None:
@@ -12,6 +14,8 @@ class Novelty:
         
         self.score = {}
         self.score_ci = {}
+        
+        self.gmm_cv = None
     
     def get_score(self,method='lof',save=True):
         score = eval(f'self._score_{method}(self.train_x,self.test_x,{save})')
@@ -44,11 +48,24 @@ class Novelty:
         from sklearn.model_selection import GridSearchCV
 
         cv = GridSearchCV(
-            estimator=GaussianMixture(max_iter=2000,random_state=0),
-            param_grid={'covariance_type':['full','diag'],'n_components':[1,2]}
+            estimator  = GaussianMixture(max_iter=2000,random_state=0),
+            param_grid = {
+                'covariance_type':['full', 'tied', 'diag', 'spherical'],
+                'n_components':list(range(1,11)),
+            },
+            n_jobs = -1,
+            refit  = True,
+            cv     = 5
         )
         cv.fit(train_x)
+        self.cv = cv 
         return cv.best_estimator_.score_samples(test_x)
+    
+    def score_gmm(self,pca=None,pca_scale=True):
+        mix = Mixture(data=self.train_x,col_x=self.train_x.columns)
+        mix.fit_gmm(pca=pca,pca_scale=pca_scale)
+        self.gmm_cv = mix.cv
+        return mix.predict_llh(new_data=self.test_x)
     
 if __name__ == '__main__':
     import numpy as np

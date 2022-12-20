@@ -72,6 +72,8 @@ class BaseModel:
         self.ExpTrain    = None  # 基于模型的解释
         self.ExpFinal    = None  # 基于最终模型的解释
         
+        self.novelty = None
+        
         self._init_data()
     
     def _init_data(self):
@@ -420,22 +422,24 @@ class BaseModel:
             
         return metric
             
-    def check_novelty(self,method:str='gmm',new_data:pd.DataFrame=None,return_score:bool=False,**kwargs):
+    def check_novelty(self,method:str='gmm',new_data:pd.DataFrame=None,return_score:bool=False,**score_kwargs):
         # 当未输入new_data时，基于train_x检查test_x
         if new_data is None:
             self.__check_model_status(type='train')
-            score = Novelty(train_x=self.train_x,test_x=self.test_x).get_score(method=method)
-            std_resid = self.best_model_test_resid / np.std(self.best_model_test_resid)
-            abs_std_resid = np.abs(std_resid)
-            # train_mae = self.MetricTrain.get_metric(style_metric=False).at[self.best_model_name,'MAE']
-        
-        # 当输入new_data时，基于整个数据集data检查new_data
-        elif new_data is not None:
-            self.__check_model_status(type='final')
-            score = Novelty(train_x=self.data.loc[:,self.col_x],test_x=new_data.loc[:,self.col_x]).get_score(method=method)
+            train_x = self.train_x
+            test_x = self.test_x
+            abs_std_resid = np.abs(self.best_model_test_resid / np.std(self.best_model_test_resid))
+        else:
+            train_x = self.data.loc[:,self.col_x]
+            test_x = new_data.loc[:,self.col_x]
             resid = new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x])
             abs_std_resid = np.abs(resid / np.std(resid))
-            # train_mae = self.MetricFinal.get_metric(style_metric=False).at[self.final_model_name,'MAE']
+        self.novelty = Novelty(train_x=train_x,test_x=test_x)
+        
+        if method == 'gmm':
+            if len(score_kwargs) == 0:
+                score_kwargs = {'pca':None,'pca_scale':True}
+            score = self.novelty.score_gmm(**score_kwargs)
         
         if not return_score:
             data = pd.DataFrame({'score' : score, 'abs_std_residual': abs_std_resid })
@@ -446,7 +450,6 @@ class BaseModel:
                 reg_method      = 'qr',
                 reg_formula     = 'y~x',
                 reg_qr_quantile = 0.95,
-                # h_line        = {'Train_MAE':train_mae},
             )
             return plot
         elif return_score:
