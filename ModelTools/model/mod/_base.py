@@ -52,7 +52,7 @@ class BaseModel:
         self.all_model         = {}  # 每个value都是GridSearchCV对象
         self.all_param         = {}
         self.all_cv_results    = {}
-        self.all_train_score   = {}  # 该得分将MSE等指标取负值, 从而使得该指标越大越好
+        self.all_cv_best_score = {}  # 该得分将MSE等指标取负值, 从而使得该指标越大越好
         self.all_train_predict = {}
         self.all_test_predict  = {}
         
@@ -72,7 +72,7 @@ class BaseModel:
         self.ExpTrain    = None  # 基于模型的解释
         self.ExpFinal    = None  # 基于最终模型的解释
         
-        self.novelty = None
+        self.Novelty = None
         
         self._init_data()
     
@@ -223,14 +223,13 @@ class BaseModel:
                 self.all_model         [name] = model
                 self.all_param         [name] = model.best_params_
                 self.all_cv_results    [name] = model.cv_results_
+                self.all_cv_best_score [name] = model.best_score_
                 self.all_train_predict [name] = train_predict
-                self.all_train_score   [name] = model.best_score_
                 self.all_test_predict  [name] = model.predict(self.test_x)
         
         if best_model == 'auto':
-            # 通过各模型在训练集上的得分, 初始化最佳模型
             # 此处得分的定义来源于self.cv_score
-            self.best_model_name = max(self.all_train_score,key=self.all_train_score.get)
+            self.best_model_name = max(self.all_cv_best_score,key=self.all_cv_best_score.get)
         else:
             self.best_model_name = best_model
         self.best_model            = self.all_model.get(self.best_model_name)
@@ -383,7 +382,7 @@ class BaseModel:
             
         return result
     
-    def check_metric(self,type='cv',style_metric=True):
+    def check_metric(self,type='cv',std_metric=False,style_metric=True):
         self.__check_model_status(type='train')
         if type == 'cv':
             result = {}
@@ -416,8 +415,10 @@ class BaseModel:
             metric.columns.name = 'Type : Final'
         
         metric = metric.reindex(list(self.all_cv_results.keys()),axis=0)    
+        if std_metric == True:
+            metric = metric.apply(lambda sr:(sr-sr.mean())/sr.std())
         if style_metric == True:
-            metric = metric.mask(lambda x:x>1e5,np.nan).round(4)
+            metric = metric.mask(lambda x:x>1e5,np.nan)
             metric = self._metric.style_metric(metric)
             
         return metric
@@ -434,12 +435,12 @@ class BaseModel:
             test_x = new_data.loc[:,self.col_x]
             resid = new_data.loc[:,self.col_y].to_numpy() - self.predict(new_data.loc[:,self.col_x])
             abs_std_resid = np.abs(resid / np.std(resid))
-        self.novelty = Novelty(train_x=train_x,test_x=test_x)
+        self.Novelty = Novelty(train_x=train_x,test_x=test_x)
         
         if method == 'gmm':
             if len(score_kwargs) == 0:
                 score_kwargs = {'pca':None,'pca_scale':True}
-            score = self.novelty.score_gmm(**score_kwargs)
+            score = self.Novelty.score_gmm(**score_kwargs)
         
         if not return_score:
             data = pd.DataFrame({'score' : score, 'abs_std_residual': abs_std_resid })
