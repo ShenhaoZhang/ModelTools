@@ -1,3 +1,8 @@
 # ModelTools 
-TODO 
-5.残差tsline增加标准化残差
+
+
+# 模型的解释
+## 模型的偏效应
+### Partial (PDP)
+### Conditional
+### Accumulated (ALE)

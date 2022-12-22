@@ -50,7 +50,7 @@ class QuantileRegBuilder(BaseBuilder):
         }
         
         self.struct = {
-            'lm': ['QR', 'poly_QR', 'sp_QR', 'inter_sp_QR'],
+            'lm': ['QR', 'inter_QR', 'poly_QR', 'sp_QR', 'inter_sp_QR'],
             'tr': ['GB', 'HGB']
         }
         

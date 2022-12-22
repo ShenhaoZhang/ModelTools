@@ -270,7 +270,9 @@ class BaseModel:
                 model      = self.best_model,
                 model_type = 'regression',
                 data_x     = self.test_x,
-                data_y     = self.test_y
+                data_y     = self.test_y,
+                loss_func  = self.cv_score,
+                **self._metric_kwargs
             )
             
         # 打印结果
@@ -304,7 +306,9 @@ class BaseModel:
                 model      = self.final_model,
                 model_type = 'regression',
                 data_x     = self.data.loc[:,self.col_x],
-                data_y     = self.data.loc[:,self.col_y].to_numpy()
+                data_y     = self.data.loc[:,self.col_y].to_numpy(),
+                loss_func  = self.cv_score,
+                **self._metric_kwargs
             )
         
         if print_result:

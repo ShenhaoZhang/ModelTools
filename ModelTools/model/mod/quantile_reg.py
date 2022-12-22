@@ -30,9 +30,11 @@ class QuantileRegression(BaseModel):
         cv_split       : int   = 5,
         cv_shuffle     : bool  = False,
         cv_score       : str   = 'pinball',
-        exp_model      : bool  = True
+        exp_model      : bool  = True,
+        param_type     : str   = 'fast'
     ) -> None:
-        super().__init__(data, col_x, col_y, col_ts, ts_freq, split_test_size, split_shuffle, cv_method, cv_split, cv_shuffle, cv_score, exp_model)
+        super().__init__(data, col_x, col_y, col_ts, ts_freq, split_test_size, split_shuffle, cv_method, cv_split, cv_shuffle, cv_score, exp_model, param_type)
+        self.quantile = quantile
         self._init_model(quantile)
     
     def _init_model(self,quantile):
