@@ -131,7 +131,6 @@ class BaseModel:
             cv_split   = self.cv_split,
             param_type = self.param_type
         ) 
-        
         self._metric = Metric
         self._metric_kwargs = metric_kwargs if metric_kwargs is not None else {}
         
@@ -325,12 +324,10 @@ class BaseModel:
     
     def predict(self,new_data=None) -> np.ndarray:
         self.__check_model_status(type='final')
-        
         if new_data is None:
             new_data = self.data.loc[:,self.col_x]
         else:
             new_data = new_data.loc[:,self.col_x]
-            
         pred = self.final_model.predict(new_data)
         return pred
 
@@ -428,6 +425,7 @@ class BaseModel:
         return metric
             
     def check_novelty(self,method:str='gmm',new_data:pd.DataFrame=None,return_score:bool=False,**score_kwargs):
+        #TODO 分位数回归的残差应改成其他定义方式
         # 当未输入new_data时，基于train_x检查test_x
         if new_data is None:
             self.__check_model_status(type='train')

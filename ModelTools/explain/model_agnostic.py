@@ -44,3 +44,8 @@ class MaExplain:
         
         plot = self.Exp.model_parts(loss_function=loss).plot()
         return plot
+    
+    def predict_part(self,new_data):
+        new_data = new_data.loc[:,self.data_x.columns]
+        plot = self.Exp.predict_parts(new_observation=new_data).plot()
+        return plot
