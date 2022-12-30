@@ -236,6 +236,42 @@ class BasicPlot:
             .mark_area(opacity=opacity,color=self.color)
         )
         return plot 
+    
+    @__set_figure
+    def rect(self,fill_color,color_scheme='redblue',color_min=-1,color_max=1):
+        self.__check_param('xy')
+        plot = (
+            self.base
+            .mark_rect() 
+            .encode(
+                x = alt.X(self.x,type='ordinal',title = None),
+                y = alt.Y(self.y,type='ordinal',title = None),
+                color = alt.Color(
+                    fill_color,
+                    type='quantitative',
+                    scale=alt.Scale(
+                        scheme    = color_scheme,
+                        domainMin = color_min,
+                        domainMax = color_max
+                    )
+                )
+                # https://vega.github.io/vega/docs/schemes/#diverging
+            )
+        )
+        return plot
+    
+    def text(self,text):
+        self.__check_param('xy')
+        plot = (
+            self.base 
+            .mark_text(color=self.color) 
+            .encode(
+                x = alt.X(self.x,type='ordinal',title = None),
+                y = alt.Y(self.y,type='ordinal',title = None),
+                text = alt.Color(text,type='quantitative')
+            )
+        )
+        return plot
 
     def __check_param(self,type):
         if type == 'xy':
