@@ -18,6 +18,7 @@ class CentralRegBuilder(BaseBuilder):
             'inter': pr.PolynomialFeatures(interaction_only=True),
             'sp'   : pr.SplineTransformer()
         }
+        
         self.param_fast = {
             'poly__degree'         : [2,3,4],
             'inter__degree'        : [2,3],
@@ -30,12 +31,12 @@ class CentralRegBuilder(BaseBuilder):
             'DT__min_samples_split': [5,30,90,200],
             'RF__max_features'     : [1,'sqrt'],
         }
-        
         self.param_complete = self.param_fast.copy()
         self.param_complete.update({
             'HUBER__alpha'  : [0.0001,0.001,0.01,0.1,1,10,100],
             'HUBER__epsilon': [1,1.05,1.1,1.15,1.2,1.25,1.3,1.35],
         })
+        self.param = self.param_fast if self.param_type == 'fast' else self.param_complete
         
         self.model = {
             'OLS'  : lm.LinearRegression(), 

@@ -42,6 +42,7 @@ class QuantileRegBuilder(BaseBuilder):
         self.param_complete = self.param_complete.update({
             'inter__degree'        : [2,3], #TODO 占位
         })
+        self.param = self.param_fast if self.param_type == 'fast' else self.param_complete
 
         self.model = {
             'QR' : QuantileRegressor(solver='highs',quantile=self.quantile),

@@ -113,13 +113,13 @@ class BaseModel:
             self.data.loc[:,self.col_ts] = pd.DatetimeIndex(self.data.loc[:,self.col_ts])
             self.data = self.data.sort_values(by=self.col_ts,ascending=True)
         
-        # 数据的探索性分析
-        self.Data = Data(
-            data   = {'train':self.train_data,'test':self.test_data},
-            col_x  = self.col_x,
-            col_y  = self.col_y,
-            col_ts = self.col_ts
-        ) 
+        # # 数据的探索性分析
+        # self.Data = Data(
+        #     data   = {'train':self.train_data,'test':self.test_data},
+        #     col_x  = self.col_x,
+        #     col_y  = self.col_y,
+        #     col_ts = self.col_ts
+        # ) 
     
     #TODO 考虑放到fit中
     def _init_model(self,Builder,Metric,metric_kwargs:dict=None):

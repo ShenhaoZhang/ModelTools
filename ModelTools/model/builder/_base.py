@@ -70,7 +70,6 @@ class BaseBuilder:
         return pipe
 
     def struct_to_param(self,struct) -> dict:
-        self.param = self.param_fast if self.param_type == 'fast' else self.param_complete
         preprocess_name, model_name = self.translate_struct(struct)
         # 生成参数网格
         # 输入指定超参数空间，替代默认值

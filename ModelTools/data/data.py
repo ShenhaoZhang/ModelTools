@@ -20,7 +20,7 @@ class Data:
         col_group: Union[list,str,None]      = None
     ) -> None:
         self.data       = data.copy()
-        self.data_n_row = self.data.shape[0]
+        self.data_n_row = self.data.shape[0] #FIXME data可能是字典
         self.data_n_col = self.data.shape[1]
         self.col_x      = col_x if col_x is not None else self.data.columns.to_list()
         self.col_x      = self.col_x if isinstance(self.col_x,list) else [self.col_x]
