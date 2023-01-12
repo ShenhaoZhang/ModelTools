@@ -81,6 +81,7 @@ class BaseBuilder:
         return valid_param
 
     def update_param(self,update_param:dict) -> None:
+        self.param = self.param_fast if self.param_type == 'fast' else self.param_complete #FIXME
         for param_name,param_space in update_param.items():
             if param_name not in self.param.keys():
                 raise Exception(f'不存在{param_name}')
