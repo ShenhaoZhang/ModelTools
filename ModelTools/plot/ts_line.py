@@ -8,8 +8,8 @@ def ts_line(
     data        : DataFrame,
     x           : str,
     y           : list,
-    x_title             = alt.Undefined,
-    y_title             = alt.Undefined,
+    x_title     : str   = alt.Undefined,
+    y_title     : str   = alt.Undefined,
     fig_width   : int   = 1000,
     fig_height  : int   = None,
     scales      : str   = 'fixed',
@@ -17,6 +17,7 @@ def ts_line(
     color_legend: str   = alt.Undefined,
     add_focus   : bool  = False
 ):
+    y = y if isinstance(y,list) else [y]
     if add_focus:
         line_width = 0.6 * fig_width
         focus_width = fig_width - line_width
