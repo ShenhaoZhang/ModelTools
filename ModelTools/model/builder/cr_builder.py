@@ -40,7 +40,7 @@ class CentralRegBuilder(BaseBuilder):
         
         self.model = {
             'OLS'  : lm.LinearRegression(), 
-            'LAR'  : lm.Lars(normalize=False),
+            'LAR'  : lm.Lars(),
             'HUBER': lm.HuberRegressor(max_iter=100),
             'EN'   : lm.ElasticNet(random_state=0),
             'BR'   : lm.BayesianRidge(),
