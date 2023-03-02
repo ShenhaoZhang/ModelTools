@@ -24,6 +24,7 @@ class CentralRegBuilder(BaseBuilder):
             'inter__degree'        : [2,3],
             'sp__extrapolation'    : ['constant','continue','linear'],
             'sp__knots'            : ['uniform','quantile'],
+            'sp__degree'           : [1,2,3],
             'EN__l1_ratio'         : [.1,.5,.7,.9,.95,.99,1],
             'HUBER__alpha'         : [0.0001],
             'HUBER__epsilon'       : [1.35],
