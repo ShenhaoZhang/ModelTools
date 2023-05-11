@@ -84,8 +84,8 @@ class Metric:
         
     def init_data(self):
         
-        true_df = pd.DataFrame(data = {self.y_name:self.y_true},index=self.index)
-        pred_df = pd.DataFrame(self.y_pred)
+        true_df  = pd.DataFrame(data = {self.y_name:self.y_true},index=self.index)
+        pred_df  = pd.DataFrame(self.y_pred)
         resid_df = pd.DataFrame(self.resid)
         
         self.data = (
