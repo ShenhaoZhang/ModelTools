@@ -25,7 +25,6 @@ class Metric:
         y_name     : str              = 'y',
         index      : pd.DatetimeIndex = None,
         index_freq : str              = None,
-        highlight  : dict             = None
     ) -> None:
         
         self.y_true = np.array(y_true)
@@ -41,17 +40,16 @@ class Metric:
         else:
             raise Exception('WRONG')
         
-        self.sample_n      = len(self.y_true)
-        self.y_pred_n      = len(self.y_pred)
-        self.y_name        = y_name
-        self.highlight     = {} if highlight is None else highlight
-        self.index         = index
-        self.index_freq    = index_freq
+        self.sample_n   = len(self.y_true)
+        self.y_pred_n   = len(self.y_pred)
+        self.y_name     = y_name
+        self.index      = index
+        self.index_freq = index_freq
         self.init_input()
         
         self.resid = {}
         for pred_name,pred_value in self.y_pred.items():
-            resid_name = pred_name.replace('pred','resid')
+            resid_name             = pred_name.replace('pred','resid')
             self.resid[resid_name] = self.y_true - pred_value
         
         self.data = None
@@ -80,7 +78,7 @@ class Metric:
                 raise ValueError('WRONG')
         else:
             self.index_name = 'sample_order'
-            self.index = np.arange(self.sample_n)
+            self.index      = np.arange(self.sample_n)
         
     def init_data(self):
         
@@ -106,15 +104,29 @@ class Metric:
         
         # 时间索引填充空缺值
         if isinstance(self.index,pd.DatetimeIndex):
-            time_start = self.data.Time.min()
-            time_end = self.data.Time.max()
+            time_start     = self.data.Time.min()
+            time_end       = self.data.Time.max()
             complete_index = pd.MultiIndex.from_product(
-                [pd.date_range(time_start,time_end,freq=self.index_freq), self.data.Method.drop_duplicates()],
+                [
+                    pd.date_range(time_start,time_end,freq=self.index_freq), 
+                    self.data.Method.drop_duplicates()
+                ],
                 names=['Time','Method']
             )
-            self.data = self.data.set_index(['Time','Method']).reindex(complete_index).reset_index()
+            self.data = (
+                self.data
+                .set_index(['Time','Method'])
+                .reindex(complete_index)
+                .reset_index()
+            )
     
-    def metric(self,type='eval') -> pd.DataFrame:
+    def get_metric(
+        self,
+        type            = 'eval',
+        style_metric    = False,
+        style_threshold = 0.8,
+    ) -> pd.DataFrame:
+        
         if type == 'eval':
             pred = self.y_pred.values()
             metric_dict = {}
@@ -128,6 +140,7 @@ class Metric:
             metric_dict['SAE']  = lambda y_pred : np.std(np.abs(y_pred - self.y_true))
             metric_dict['SAPE'] = lambda y_pred : np.std(np.abs((y_pred - self.y_true) / self.y_true))
             metric_dict = {name:list(map(func,pred)) for name,func in metric_dict.items()}
+            
         elif type == 'resid':
             #TODO 增加ACF特征
             resid = self.resid.values()
@@ -139,26 +152,19 @@ class Metric:
             metric_dict['Skew']   = stats.skew
             metric_dict['Kurt']   = stats.kurtosis
             metric_dict = {name:list(map(func,resid)) for name,func in metric_dict.items()}
+            
         else:
             raise TypeError('WRONG')
-        metric = pd.DataFrame(metric_dict,index=[name.strip('pred_') for name in self.y_pred.keys()]).sort_index()
-        return metric
-    
-    def get_metric(
-        self,
-        type              = 'eval',
-        style_metric      = False,
-        style_threshold   = 0.8,
-        add_highlight_col = False
-    ) -> pd.DataFrame:
         
-        metric = self.metric(type)
-        if add_highlight_col:
-            metric = metric.assign(Highlight = lambda dt:dt.index.map(self.highlight)).fillna({'Highlight':'Others'})
+        metric = pd.DataFrame(
+            data  = metric_dict,
+            index = [name.strip('pred_') for name in self.y_pred.keys()]
+            ).sort_index()
+        
         if style_metric:
             metric = self.style_metric(metric=metric,threshold=style_threshold)
+            
         return metric
-    
     
     @staticmethod    
     def style_metric(metric:pd.DataFrame,threshold=0.8,up=None,dw=None):
