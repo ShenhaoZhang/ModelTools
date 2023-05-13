@@ -12,8 +12,6 @@ from sklearn.model_selection import (
     KFold
 )
 
-from .Metric import Metric
-
 class RegBuilder:
     
     model = {
@@ -47,7 +45,7 @@ class RegBuilder:
     
     def __init__(
         self,
-        method:Union[str,dict]
+        method:Union[str,dict] = 'poly_OLS'
     ) -> None:
         
         # 两种method：
@@ -85,12 +83,26 @@ class RegBuilder:
     
     def fit(
         self,
-        X,y
+        X,y,
+        cv_method   = 'kfold',
+        cv_n_splits = 5,
+        cv_shuffle  = False
     ) -> GridSearchCV:
         
         param_grid = {}
         for param in self.method.values():
             param_grid.update(param)
+        
+        if cv_method == 'kfold':
+            cv_method = KFold(
+                n_splits     = cv_n_splits,
+                shuffle      = cv_shuffle,
+                random_state = 0 if cv_shuffle == True else None
+            )
+        elif cv_method == 'ts':
+            cv_method = TimeSeriesSplit(
+                n_splits = cv_n_splits
+            )
         
         self.cv = GridSearchCV(
             estimator          = self.pipe,
@@ -98,7 +110,7 @@ class RegBuilder:
             # scoring            = ...,
             # n_jobs             = ...,
             refit              = True,
-            # cv                 = ...,
+            cv                 = cv_method,
             # verbose            = ...,
             # pre_dispatch       = ...,
             # error_score        = ...,
@@ -107,8 +119,40 @@ class RegBuilder:
         self.cv.fit(
             X,y
         )
+        self.X = X 
+        self.y = y
+        
         return self.cv
     
-    def predict(self,X):
-        return self.cv.predict(X)
+    def predict(self,X,) -> np.ndarray:
+        pred = self.cv.predict(X)
+        return pred
     
+    def predict_interval(self,X,alpha=0.05) -> tuple:
+        #TODO 保存模型，避免重复训练
+        from mapie.regression import MapieRegressor
+        pred_interval = MapieRegressor(self.cv).fit(self.X,self.y).predict(X,alpha=alpha)[1]
+        pred_low      = pred_interval[:,0,:].flatten()
+        pred_up       = pred_interval[:,1,:].flatten()
+        return pred_low,pred_up
+
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    
+    rng = np.random.default_rng(0)
+    x   = rng.normal(0,0.1,100).cumsum()
+    y   = rng.normal(3+2*x+x**2,scale=0.3)
+    m   = RegBuilder('poly_OLS')
+    m.fit(x.reshape(-1,1),y)
+
+    x_new = np.linspace(-3,3,100)
+    y_new = rng.normal(3+2*x_new+x_new**2,scale=0.3)
+    mean  = m.predict(x_new.reshape(-1,1))
+    lw,up = m.predict_interval(x_new.reshape(-1,1),alpha=0.05)
+
+    plt.plot(x_new,mean,c='red')
+    plt.scatter(x_new,y_new)
+    plt.fill_between(x_new,lw,up,alpha=0.3)
+    plt.vlines(x=min(x),ymin=min(lw),ymax=max(up),colors='green')
+    plt.vlines(x=max(x),ymin=min(lw),ymax=max(up),colors='green')
+    plt.show()
