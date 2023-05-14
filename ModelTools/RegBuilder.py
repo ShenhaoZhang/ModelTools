@@ -5,6 +5,8 @@ from sklearn import linear_model as lm
 from sklearn import tree
 from sklearn import ensemble as en
 from sklearn import preprocessing as pr
+from sklearn import metrics
+from sklearn import decomposition as de
 from sklearn.pipeline import Pipeline 
 from sklearn.model_selection import (
     GridSearchCV,
@@ -27,7 +29,8 @@ class RegBuilder:
         'std'  : pr.StandardScaler(),
         'poly' : pr.PolynomialFeatures(),
         'inter': pr.PolynomialFeatures(interaction_only=True),
-        'sp'   : pr.SplineTransformer()
+        'sp'   : pr.SplineTransformer(),
+        'pca'  : de.PCA()
     }
     param = {
         'poly__degree'         : [2,3,4],
@@ -41,6 +44,7 @@ class RegBuilder:
         'DT__max_depth'        : [2,4,6,8,10],
         'DT__min_samples_split': [5,30,90,200],
         'RF__max_features'     : [1,'sqrt'],
+        'pca__n_components'    : [.9,.95,.99,.999,1]
     }
     
     def __init__(
@@ -78,6 +82,8 @@ class RegBuilder:
         pipe = []
         for mth in self.method.keys():
             step = self.preprocess.get(mth,self.model.get(mth))
+            if step is None:
+                raise Exception(f'未发现{mth}')
             pipe.append((mth,step))
         self.pipe = Pipeline(steps=pipe)
     
@@ -86,35 +92,23 @@ class RegBuilder:
         X,y,
         cv_method   = 'kfold',
         cv_n_splits = 5,
-        cv_shuffle  = False
+        cv_shuffle  = False,
+        cv_score    = 'mse'
     ) -> GridSearchCV:
         
         param_grid = {}
         for param in self.method.values():
             param_grid.update(param)
         
-        if cv_method == 'kfold':
-            cv_method = KFold(
-                n_splits     = cv_n_splits,
-                shuffle      = cv_shuffle,
-                random_state = 0 if cv_shuffle == True else None
-            )
-        elif cv_method == 'ts':
-            cv_method = TimeSeriesSplit(
-                n_splits = cv_n_splits
-            )
-        
+        cv_method = get_cv_method(cv_method,cv_n_splits,cv_shuffle)
+        cv_score  = get_cv_score(cv_score)
         self.cv = GridSearchCV(
-            estimator          = self.pipe,
-            param_grid         = param_grid,
-            # scoring            = ...,
-            # n_jobs             = ...,
-            refit              = True,
-            cv                 = cv_method,
-            # verbose            = ...,
-            # pre_dispatch       = ...,
-            # error_score        = ...,
-            return_train_score = True
+            estimator  = self.pipe,
+            param_grid = param_grid,
+            scoring    = cv_score,
+            n_jobs     = -1,
+            refit      = True,
+            cv         = cv_method,
         )
         
         self.cv.fit(X,y)
@@ -136,6 +130,8 @@ class RegBuilder:
         pred_up       = pred_interval[:,1,:].flatten()
         return pred_low,pred_up
 
+
+
 def get_coef(cv) -> dict:
     try:
         coef_value = getattr(cv.best_estimator_[-1],'coef_',[])
@@ -147,6 +143,29 @@ def get_coef(cv) -> dict:
     except:
         coef = None
     return coef
+
+def get_cv_method(method_name,n_splits,cv_shuffle=False):
+    if method_name == 'kfold':
+        cv_method = KFold(
+            n_splits     = n_splits ,
+            shuffle      = cv_shuffle ,
+            random_state = 0 if cv_shuffle == True else None
+        )
+    elif method_name == 'ts':
+        cv_method = TimeSeriesSplit(
+            n_splits=n_splits
+        )
+    return cv_method
+
+def get_cv_score(score_name:str):
+    score = {
+        'mse' : metrics.get_scorer('neg_mean_squared_error'),  
+        'mae' : metrics.get_scorer('neg_mean_absolute_error'),
+        'mdae': metrics.get_scorer('neg_median_absolute_error'),
+        'mape': metrics.get_scorer('neg_mean_absolute_percentage_error'),
+    }
+    score = score.get(score_name)
+    return score
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
