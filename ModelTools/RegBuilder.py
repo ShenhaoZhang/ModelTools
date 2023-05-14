@@ -116,11 +116,11 @@ class RegBuilder:
             # error_score        = ...,
             return_train_score = True
         )
-        self.cv.fit(
-            X,y
-        )
-        self.X = X 
-        self.y = y
+        
+        self.cv.fit(X,y)
+        self.X    = X
+        self.y    = y
+        self.coef = get_coef(self.cv)
         
         return self.cv
     
@@ -135,6 +135,18 @@ class RegBuilder:
         pred_low      = pred_interval[:,0,:].flatten()
         pred_up       = pred_interval[:,1,:].flatten()
         return pred_low,pred_up
+
+def get_coef(cv) -> dict:
+    try:
+        coef_value = getattr(cv.best_estimator_[-1],'coef_',[])
+        coef_name  = cv.best_estimator_[:-1].get_feature_names_out()
+        coef_name  = [f'x{i}' for i in range(len(coef_value))] if coef_name is None else coef_name
+        coef       = dict(zip(coef_name,coef_value))
+        intercept  = {'intercept_':getattr(cv.best_estimator_[-1],'intercept_',[])}
+        coef       = {**intercept,**coef}
+    except:
+        coef = None
+    return coef
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
