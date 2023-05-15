@@ -49,7 +49,7 @@ class RegBuilder:
     
     def __init__(
         self,
-        method:Union[str,dict] = 'poly_OLS'
+        method:Union[str,dict,Pipeline] = 'poly_OLS'
     ) -> None:
         
         # 两种method：
@@ -59,26 +59,27 @@ class RegBuilder:
         self.method    = method
         self.estimator = None
         
-        self.init_method()
         self.init_pipe()
     
-    def init_method(self) -> None:
+    def init_pipe(self) -> None:
         if isinstance(self.method,str):
-            method_split = self.method.split('_')
             method = {}
+            method_split = self.method.split('_')
             for mth in method_split:
                 param       = {name:param for name,param in self.param.items() if name.split('__')[0]==mth}
                 method[mth] = param
-        
-        if isinstance(self.method,dict):
+            self.method = method
+        elif isinstance(self.method,dict):
             method = {}
             for mth,param in self.method.items():
                 adj_param = {f'{mth}__{n}':v for n,v in param.items()}
                 method[mth] = adj_param
+            self.method = method
+        elif isinstance(self.method,Pipeline):
+            self.pipe   = self.method
+            self.method = {}
+            return
         
-        self.method = method
-        
-    def init_pipe(self):
         pipe = []
         for mth in self.method.keys():
             step = self.preprocess.get(mth,self.model.get(mth))
@@ -94,7 +95,7 @@ class RegBuilder:
         cv_n_splits = 5,
         cv_shuffle  = False,
         cv_score    = 'mse'
-    ) -> GridSearchCV:
+    ):
         
         param_grid = {}
         for param in self.method.values():
@@ -116,14 +117,17 @@ class RegBuilder:
         self.y    = y
         self.coef = get_coef(self.cv)
         
-        return self.cv
-    
-    def predict(self,X,) -> np.ndarray:
+        return self
+        
+    def predict(self,X=None) -> np.ndarray:
+        if X is None:
+            X = self.X
         pred = self.cv.predict(X)
         return pred
     
     def predict_interval(self,X,alpha=0.05) -> tuple:
         #TODO 保存模型，避免重复训练
+        #TODO 选择最好的区间预测方法
         from mapie.regression import MapieRegressor
         pred_interval = MapieRegressor(self.cv).fit(self.X,self.y).predict(X,alpha=alpha)[1]
         pred_low      = pred_interval[:,0,:].flatten()
