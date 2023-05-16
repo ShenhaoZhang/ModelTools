@@ -1,6 +1,7 @@
 from typing import Union
 
 import numpy as np
+import pandas as pd
 from sklearn import linear_model as lm
 from sklearn import tree
 from sklearn import ensemble as en
@@ -14,7 +15,12 @@ from sklearn.model_selection import (
     KFold
 )
 
+
 class RegBuilder:
+    
+    def formula_transform(data:pd.DataFrame,formula:str):
+        from formulaic import model_matrix
+        return model_matrix(formula,data)   
     
     model = {
         'OLS'  : lm.LinearRegression(), 
@@ -26,13 +32,14 @@ class RegBuilder:
         'RF'   : en.RandomForestRegressor(random_state=0),
     }
     preprocess = {
-        'std'  : pr.StandardScaler(),
-        'poly' : pr.PolynomialFeatures(),
-        'inter': pr.PolynomialFeatures(interaction_only=True),
-        'sp'   : pr.SplineTransformer(),
-        'pca'  : de.PCA()
+        'std'    : pr.StandardScaler(),
+        'poly'   : pr.PolynomialFeatures(),
+        'inter'  : pr.PolynomialFeatures(interaction_only=True),
+        'sp'     : pr.SplineTransformer(),
+        'pca'    : de.PCA(),
+        'fml'    : pr.FunctionTransformer(func=formula_transform)
     }
-    param = {
+    cv_param = {
         'poly__degree'         : [2,3,4],
         'inter__degree'        : [2,3],
         'sp__extrapolation'    : ['constant','continue','linear'],
@@ -49,72 +56,87 @@ class RegBuilder:
     
     def __init__(
         self,
-        method:Union[str,dict,Pipeline] = 'poly_OLS'
+        method : Union[str,dict,Pipeline] = 'poly_OLS',
+        method_args : dict = None
     ) -> None:
         
-        # 两种method：
-        # list ：poly_OLS
-        # dict ：{'poly':{'degree':2},'OLS':{}}
-        
-        self.method    = method
-        self.estimator = None
-        
-        self.init_pipe()
+        self.method       = method
+        self.method_steps = None
+        self.estimator    = None
+        self.init_estimator()
     
-    def init_pipe(self) -> None:
+        # method type
+        # str1  ：poly_OLS
+        # str2  : ~poly(x1)_OLS
+        # pipe
+    
+    def init_pipeline(self):
+        if isinstance(self.method,Pipeline):
+            
+    
+    def init_estimator(self) -> None:
+        # method_steps = {'poly'     : {'poly__degree': [2, 3, 4]}, 'OLS': {}}
+        # method_steps = {'step_name': {'step_param'  : step_value}}
+        
         if isinstance(self.method,str):
-            method = {}
-            method_split = self.method.split('_')
-            for mth in method_split:
-                param       = {name:param for name,param in self.param.items() if name.split('__')[0]==mth}
-                method[mth] = param
-            self.method = method
-        elif isinstance(self.method,dict):
-            method = {}
-            for mth,param in self.method.items():
-                adj_param = {f'{mth}__{n}':v for n,v in param.items()}
-                method[mth] = adj_param
-            self.method = method
+            self.method_steps = {}
+            for step_name in self.method.split('_'):
+                step_name_dict = {}
+                for step_param,step_value in self.param.items():
+                    if step_param.split('__')[0] == step_name:
+                        step_name_dict[step_param] = step_value
+                self.method_steps[step_name] = step_name_dict
+            
+            
         elif isinstance(self.method,Pipeline):
-            self.pipe   = self.method
-            self.method = {}
+            self.method_steps = {}
+            self.estimator = self.method
             return
         
         pipe = []
-        for mth in self.method.keys():
-            step = self.preprocess.get(mth,self.model.get(mth))
-            if step is None:
-                raise Exception(f'未发现{mth}')
-            pipe.append((mth,step))
-        self.pipe = Pipeline(steps=pipe)
+        for step in self.method_steps.keys():
+            preprocess = self.preprocess.get(step,self.model.get(step))
+            if preprocess is None:
+                raise Exception(f'未发现{step}')
+            pipe.append((step,preprocess))
+        self.estimator = Pipeline(steps=pipe)
+        
+        self.cv_param_grid = {}
+        for param in self.method_steps.values():
+            self.cv_param_grid.update(param)
     
     def fit(
         self,
-        X,y,
+        X : np.ndarray | pd.DataFrame,
+        y : np.ndarray | pd.DataFrame,
         cv_method   = 'kfold',
         cv_n_splits = 5,
         cv_shuffle  = False,
         cv_score    = 'mse'
     ):
+        if isinstance(X,np.ndarray):
+            col_name = [f'x{i}' for i in range(X.shape[1])]
+            self.X = pd.DataFrame(data=X,columns=col_name)
+        elif isinstance(X,pd.DataFrame):
+            self.X = X
+        self.y = y
         
-        param_grid = {}
-        for param in self.method.values():
-            param_grid.update(param)
+        
+        # if 'fml' in self.method_steps.keys():
+        #     self.estimator = self.estimator.set_params(**{'fml__kw_args':{'data':X}})
         
         cv_method = get_cv_method(cv_method,cv_n_splits,cv_shuffle)
         cv_score  = get_cv_score(cv_score)
         self.cv = GridSearchCV(
-            estimator  = self.pipe,
-            param_grid = param_grid,
+            estimator  = self.estimator,
+            param_grid = self.cv_param_grid,
             scoring    = cv_score,
             n_jobs     = -1,
             refit      = True,
             cv         = cv_method,
         )
         
-        self.cv.fit(X,y)
-        self.X    = X
-        self.y    = y
+        self.cv.fit(self.X,self.y)
         self.coef = get_coef(self.cv)
         
         return self
@@ -134,7 +156,14 @@ class RegBuilder:
         pred_up       = pred_interval[:,1,:].flatten()
         return pred_low,pred_up
 
-
+    def init_data(self,X):
+        if isinstance(X,np.ndarray):
+            col_name = [f'x{i}' for i in range(X.shape[1])]
+            self.X = pd.DataFrame(data=X,columns=col_name)
+        elif isinstance(X,pd.DataFrame):
+            self.X = X
+        self.y = y
+        return self.X,self.Y
 
 def get_coef(cv) -> dict:
     try:
@@ -170,6 +199,7 @@ def get_cv_score(score_name:str):
     }
     score = score.get(score_name)
     return score
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
