@@ -18,10 +18,6 @@ from sklearn.model_selection import (
 
 class RegBuilder:
     
-    def formula_transform(data:pd.DataFrame,formula:str):
-        from formulaic import model_matrix
-        return model_matrix(formula,data)   
-    
     model = {
         'OLS'  : lm.LinearRegression(), 
         'LAR'  : lm.Lars(),
@@ -37,7 +33,7 @@ class RegBuilder:
         'inter'  : pr.PolynomialFeatures(interaction_only=True),
         'sp'     : pr.SplineTransformer(),
         'pca'    : de.PCA(),
-        'fml'    : pr.FunctionTransformer(func=formula_transform)
+        'fml'    : pr.FunctionTransformer()
     }
     cv_param = {
         'poly__degree'         : [2,3,4],
@@ -57,53 +53,45 @@ class RegBuilder:
     def __init__(
         self,
         method : Union[str,dict,Pipeline] = 'poly_OLS',
-        method_args : dict = None
+        method_args : dict = None,
+        formula:str = None
     ) -> None:
         
-        self.method       = method
-        self.method_steps = None
-        self.estimator    = None
-        self.init_estimator()
+        self.method      = method
+        self.method_args = method_args
+        self.formula     = formula
+        self.init_pipeline()
     
         # method type
         # str1  ：poly_OLS
-        # str2  : ~poly(x1)_OLS
+        # str2  : fml_OLS
         # pipe
     
     def init_pipeline(self):
         if isinstance(self.method,Pipeline):
-            
+            self.pipeline = Pipeline
+            return None
+        
+        steps = []
+        for pipe_name in self.method.split('_'):
+            estimator = self.preprocess.get(pipe_name,self.model.get(pipe_name))
+            if estimator is None:
+                raise Exception(f'未发现{pipe_name}')
+            steps.append((pipe_name,estimator))
+        self.pipeline = Pipeline(steps)
     
-    def init_estimator(self) -> None:
-        # method_steps = {'poly'     : {'poly__degree': [2, 3, 4]}, 'OLS': {}}
-        # method_steps = {'step_name': {'step_param'  : step_value}}
-        
-        if isinstance(self.method,str):
-            self.method_steps = {}
-            for step_name in self.method.split('_'):
-                step_name_dict = {}
-                for step_param,step_value in self.param.items():
-                    if step_param.split('__')[0] == step_name:
-                        step_name_dict[step_param] = step_value
-                self.method_steps[step_name] = step_name_dict
-            
-            
-        elif isinstance(self.method,Pipeline):
-            self.method_steps = {}
-            self.estimator = self.method
-            return
-        
-        pipe = []
-        for step in self.method_steps.keys():
-            preprocess = self.preprocess.get(step,self.model.get(step))
-            if preprocess is None:
-                raise Exception(f'未发现{step}')
-            pipe.append((step,preprocess))
-        self.estimator = Pipeline(steps=pipe)
-        
-        self.cv_param_grid = {}
-        for param in self.method_steps.values():
-            self.cv_param_grid.update(param)
+    def update_pipeline(self,estimator_param:dict):
+        # 更新pipeline中的参数
+        # estimator_param : {'poly__degree':[1]}
+        self.pipeline.set_params(**estimator_param)
+    
+    def get_cv_param_grid(self):
+        cv_param_grid = {}
+        for pipe_name in self.method.split('_'):
+            for param_name,param_value in self.cv_param.items():
+                if pipe_name in param_name.split('__')[0]:
+                    cv_param_grid.update({param_name:param_value})
+        return cv_param_grid
     
     def fit(
         self,
@@ -121,15 +109,25 @@ class RegBuilder:
             self.X = X
         self.y = y
         
+        if self.formula is not None:
+            mod = self.method.split('_')[-1]
+            self.update_pipeline({
+                'fml__func'             : formula_transform,
+                'fml__kw_args'          : {'formula':self.formula},
+                'fml__feature_names_out': lambda x,y: fml_feature_names_out(x,y,formula=self.formula),
+            })
+            try:
+                self.update_pipeline({f'{mod}__fit_intercept':False})
+            except:
+                pass
         
-        # if 'fml' in self.method_steps.keys():
-        #     self.estimator = self.estimator.set_params(**{'fml__kw_args':{'data':X}})
-        
-        cv_method = get_cv_method(cv_method,cv_n_splits,cv_shuffle)
-        cv_score  = get_cv_score(cv_score)
+        cv_param    = self.get_cv_param_grid()
+        cv_n_splits = 2 if len(cv_param) == 0 else cv_n_splits
+        cv_method   = get_cv_method(cv_method,cv_n_splits,cv_shuffle)
+        cv_score    = get_cv_score(cv_score)
         self.cv = GridSearchCV(
-            estimator  = self.estimator,
-            param_grid = self.cv_param_grid,
+            estimator  = self.pipeline,
+            param_grid = cv_param,
             scoring    = cv_score,
             n_jobs     = -1,
             refit      = True,
@@ -137,7 +135,7 @@ class RegBuilder:
         )
         
         self.cv.fit(self.X,self.y)
-        self.coef = get_coef(self.cv)
+        self.coef = get_coef(self.cv,fit_intercept=False) if self.formula is not None else get_coef(self.cv)
         
         return self
         
@@ -147,7 +145,9 @@ class RegBuilder:
         pred = self.cv.predict(X)
         return pred
     
-    def predict_interval(self,X,alpha=0.05) -> tuple:
+    def predict_interval(self,X=None,alpha=0.05) -> tuple:
+        if X is None:
+            X = self.X 
         #TODO 保存模型，避免重复训练
         #TODO 选择最好的区间预测方法
         from mapie.regression import MapieRegressor
@@ -165,16 +165,14 @@ class RegBuilder:
         self.y = y
         return self.X,self.Y
 
-def get_coef(cv) -> dict:
-    try:
-        coef_value = getattr(cv.best_estimator_[-1],'coef_',[])
-        coef_name  = cv.best_estimator_[:-1].get_feature_names_out()
-        coef_name  = [f'x{i}' for i in range(len(coef_value))] if coef_name is None else coef_name
-        coef       = dict(zip(coef_name,coef_value))
-        intercept  = {'intercept_':getattr(cv.best_estimator_[-1],'intercept_',[])}
-        coef       = {**intercept,**coef}
-    except:
-        coef = None
+
+def get_coef(cv,fit_intercept=True) -> dict:
+    coef_value = getattr(cv.best_estimator_[-1],'coef_',[])
+    coef_name  = cv.best_estimator_[:-1].get_feature_names_out()
+    coef_name  = [f'x{i}' for i in range(len(coef_value))] if coef_name is None else coef_name
+    coef       = dict(zip(coef_name,coef_value))
+    intercept  = {'intercept_':getattr(cv.best_estimator_[-1],'intercept_',[])}
+    coef       = {**intercept,**coef} if fit_intercept == True else {**coef}
     return coef
 
 def get_cv_method(method_name,n_splits,cv_shuffle=False):
@@ -200,6 +198,14 @@ def get_cv_score(score_name:str):
     score = score.get(score_name)
     return score
 
+def formula_transform(data:pd.DataFrame,formula:str):
+    from formulaic import model_matrix
+    return model_matrix(formula,data)   
+
+def fml_feature_names_out(transformer,input_name,formula):
+    data = pd.DataFrame(columns=input_name,data=np.ones(len(input_name)).reshape(1,-1))
+    output = formula_transform(data,formula)
+    return output.columns.to_list()
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
