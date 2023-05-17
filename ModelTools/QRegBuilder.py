@@ -18,8 +18,14 @@ class QRegBuilder(RegBuilder):
         'HGBR': HistGradientBoostingRegressor(loss='quantile'),
     }
     
-    def __init__(self, method: str | dict | Pipeline = 'poly_OLS',alpha: float = 0.5) -> None:
-        self.param.update(
+    def __init__(
+        self, 
+        method: str | dict | Pipeline = 'poly_OLS',
+        method_args = None,
+        formula = None,
+        alpha: float = 0.5
+    ) -> None:
+        self.cv_param.update(
             {
                 'QR__alpha'            : [0,.1,.5,.7,.9,.95,.99,1],
                 'GB__learning_rate'    : [.05, .1, .2],
@@ -29,7 +35,7 @@ class QRegBuilder(RegBuilder):
             }
         )
         self.alpha = alpha
-        super().__init__(method)
+        super().__init__(method,method_args,formula)
         
     def fit(
         self,
