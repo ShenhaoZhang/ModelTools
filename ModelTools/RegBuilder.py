@@ -62,11 +62,6 @@ class RegBuilder:
         self.formula     = formula
         self.init_pipeline()
     
-        # method type
-        # str1  ：poly_OLS
-        # str2  : fml_OLS
-        # pipe
-    
     def init_pipeline(self):
         if isinstance(self.method,Pipeline):
             self.pipeline = Pipeline
@@ -102,19 +97,15 @@ class RegBuilder:
         cv_shuffle  = False,
         cv_score    = 'mse'
     ):
-        if isinstance(X,np.ndarray):
-            col_name = [f'x{i}' for i in range(X.shape[1])]
-            self.X = pd.DataFrame(data=X,columns=col_name)
-        elif isinstance(X,pd.DataFrame):
-            self.X = X
+        self.X = self.init_X(X)
         self.y = y
         
         if self.formula is not None:
             mod = self.method.split('_')[-1]
             self.update_pipeline({
                 'fml__func'             : formula_transform,
-                'fml__kw_args'          : {'formula':self.formula},
-                'fml__feature_names_out': lambda x,y: fml_feature_names_out(x,y,formula=self.formula),
+                'fml__kw_args'          : {'formula':self.formula,'train_X':self.X},
+                'fml__feature_names_out': lambda x,y: fml_feature_names_out(x,y,formula=self.formula,train_X=self.X),
             })
             try:
                 self.update_pipeline({f'{mod}__fit_intercept':False})
@@ -140,14 +131,14 @@ class RegBuilder:
         return self
         
     def predict(self,X=None) -> np.ndarray:
-        if X is None:
-            X = self.X
+        X = self.X if X is None else self.init_X(X)
+            
         pred = self.cv.predict(X)
         return pred
     
     def predict_interval(self,X=None,alpha=0.05) -> tuple:
-        if X is None:
-            X = self.X 
+        X = self.X if X is None else self.init_X(X)
+        
         #TODO 保存模型，避免重复训练
         #TODO 选择最好的区间预测方法
         from mapie.regression import MapieRegressor
@@ -156,15 +147,13 @@ class RegBuilder:
         pred_up       = pred_interval[:,1,:].flatten()
         return pred_low,pred_up
 
-    def init_data(self,X):
+    def init_X(self,X):
         if isinstance(X,np.ndarray):
             col_name = [f'x{i}' for i in range(X.shape[1])]
-            self.X = pd.DataFrame(data=X,columns=col_name)
+            X = pd.DataFrame(data=X,columns=col_name)
         elif isinstance(X,pd.DataFrame):
-            self.X = X
-        self.y = y
-        return self.X,self.Y
-
+            X = X
+        return X
 
 def get_coef(cv,fit_intercept=True) -> dict:
     coef_value = getattr(cv.best_estimator_[-1],'coef_',[])
@@ -198,13 +187,19 @@ def get_cv_score(score_name:str):
     score = score.get(score_name)
     return score
 
-def formula_transform(data:pd.DataFrame,formula:str):
-    from formulaic import model_matrix
-    return model_matrix(formula,data)   
+def formula_transform(data:pd.DataFrame,formula:str,train_X):
+    from patsy import dmatrix,build_design_matrices
+    dmx = dmatrix(formula,train_X)
+    transform = build_design_matrices([dmx.design_info],data)[0]
+    result = pd.DataFrame(
+        data    = np.asarray(transform),
+        columns = dmx.design_info.column_names
+    )
+    return result   
 
-def fml_feature_names_out(transformer,input_name,formula):
+def fml_feature_names_out(transformer,input_name,formula,train_X):
     data = pd.DataFrame(columns=input_name,data=np.ones(len(input_name)).reshape(1,-1))
-    output = formula_transform(data,formula)
+    output = formula_transform(data,formula,train_X)
     return output.columns.to_list()
 
 if __name__ == '__main__':
