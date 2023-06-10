@@ -86,6 +86,10 @@ class LinearModel:
         
         if new_data is None:
             data = self.data
+        elif isinstance(new_data,dict):
+            from .data_grid import DataGrid
+            y_col = re.findall('(.+)~',self.formula)
+            data = DataGrid(self.data.drop(y_col,axis=1)).get_grid(**new_data)
         else:
             data = self.__init_data(new_data)
             
@@ -97,10 +101,12 @@ class LinearModel:
         # 区间预测
         interval = self.__predict_interval(new_x,alpha=alpha,method=ci_method)
         
-        predictions = pd.concat([pd.DataFrame({'pred' : pred}),interval],axis=1)
-        
+        predictions = [pd.DataFrame({'pred' : pred}),interval]
         if new_data is None:
-            predictions = pd.concat([predictions,self.data],axis=1)
+            predictions.append(self.data)
+        else:
+            predictions.append(data)
+        predictions = pd.concat(predictions,axis=1)
         
         return predictions
 
