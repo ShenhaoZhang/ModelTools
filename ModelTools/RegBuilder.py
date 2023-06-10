@@ -62,12 +62,7 @@ class RegBuilder:
         self.formula     = formula
         self.init_pipeline()
     
-        # method type
-        # str1  ：poly_OLS
-        # str2  : fml_OLS
-        # pipe
-    
-    def init_pipeline(self):
+    def init_pipeline(self) -> None:
         if isinstance(self.method,Pipeline):
             self.pipeline = Pipeline
             return None
@@ -80,12 +75,12 @@ class RegBuilder:
             steps.append((pipe_name,estimator))
         self.pipeline = Pipeline(steps)
     
-    def update_pipeline(self,estimator_param:dict):
+    def update_pipeline(self,estimator_param:dict) -> None:
         # 更新pipeline中的参数
         # estimator_param : {'poly__degree':[1]}
         self.pipeline.set_params(**estimator_param)
     
-    def get_cv_param_grid(self):
+    def get_cv_param_grid(self) -> dict:
         cv_param_grid = {}
         for pipe_name in self.method.split('_'):
             for param_name,param_value in self.cv_param.items():
@@ -103,8 +98,10 @@ class RegBuilder:
         cv_score    = 'mse'
     ):
         if isinstance(X,np.ndarray):
+            if len(X.shape)==1:
+                X = X.reshape(-1,1)
             col_name = [f'x{i}' for i in range(X.shape[1])]
-            self.X = pd.DataFrame(data=X,columns=col_name)
+            self.X   = pd.DataFrame(data=X,columns=col_name)
         elif isinstance(X,pd.DataFrame):
             self.X = X
         self.y = y
@@ -117,6 +114,7 @@ class RegBuilder:
                 'fml__feature_names_out': lambda x,y: fml_feature_names_out(x,y,formula=self.formula),
             })
             try:
+                print('a')
                 self.update_pipeline({f'{mod}__fit_intercept':False})
             except:
                 pass
@@ -135,7 +133,11 @@ class RegBuilder:
         )
         
         self.cv.fit(self.X,self.y)
-        self.coef = get_coef(self.cv,fit_intercept=False) if self.formula is not None else get_coef(self.cv)
+        
+        if self.formula is not None:
+            self.coef = get_coef(self.cv,fit_intercept=False)
+        else:
+            self.coef = get_coef(self.cv)
         
         return self
         
