@@ -142,8 +142,8 @@ class RegBuilder:
         return self
         
     def predict(self,X=None) -> np.ndarray:
-        if X is None:
-            X = self.X
+        X = self.X if X is None else self.init_X(X)
+            
         pred = self.cv.predict(X)
         return pred
     
