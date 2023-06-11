@@ -24,7 +24,7 @@ class LinearModel:
         self.data      = self.__init_data(data) 
         self.x,self.y  = self.__model_dataframe(data=self.data,formula=self.formula)
         self.mod       = None
-        self.boot_dist = None
+        self.param_dist_boot = None
     
     def __init_data(self,data) -> pd.DataFrame:
         if isinstance(data,pd.DataFrame):
@@ -55,6 +55,35 @@ class LinearModel:
         self.mod.fit(X=self.x,y=self.y)
         self.train_resid = self.y - self.mod.predict(self.x)
         return self
+
+    def bootstrap_param(self,n_resamples=1000):
+        self.__check_fitted()
+        
+        #TODO 将模型中的超参数固定（包含CV类型的MOD）
+        mod            = clone(self.mod)
+        bootstrap_x    = self.x.to_numpy()
+        bootstrap_data = [bootstrap_x[:,i] for i in range(bootstrap_x.shape[1])]
+        bootstrap_data.append(self.y)
+        def get_boot_coef(*args):
+            x = np.column_stack(args[:-1])
+            y = args[-1]
+            mod.fit(x,y)
+            return mod.coef_
+        self.param_dist_boot = bootstrap(
+            data             = bootstrap_data,
+            statistic        = get_boot_coef,
+            n_resamples      = n_resamples,
+            confidence_level = 0.5,
+            paired           = True,
+            random_state     = 0
+        ).bootstrap_distribution.T
+        
+        self.param_dist_boot = pd.DataFrame(
+            data    = self.param_dist_boot,
+            columns = self.x.columns
+        )
+        
+        return self
     
     def coef(self,CI_level=0.95) -> pd.DataFrame:
         self.__check_fitted()
@@ -63,16 +92,16 @@ class LinearModel:
         coef_value = self.mod.coef_.flatten()
         coef       = pd.DataFrame(data={'Estimate':coef_value},index=coef_name)
         
-        if self.boot_dist is not None:
+        if self.param_dist_boot is not None:
             low_level  = (1 - CI_level) / 2
             high_level = CI_level + (1 - CI_level) / 2
             coef = (
                 pd.concat([
                     coef,
                     pd.DataFrame({
-                        'Std_Error': np.std(self.boot_dist,axis=1),
-                        'CI_Low'   : np.quantile(self.boot_dist,low_level,axis=1),
-                        'CI_High'  : np.quantile(self.boot_dist,high_level,axis=1),
+                        'Std_Error': np.std(self.param_dist_boot,axis=0),
+                        'CI_Low'   : np.quantile(self.param_dist_boot,low_level,axis=0),
+                        'CI_High'  : np.quantile(self.param_dist_boot,high_level,axis=0),
                         },index=coef_name)
                 ],axis=1)
             )
@@ -110,28 +139,6 @@ class LinearModel:
         
         return predictions
 
-    def bootstrap_param(self,n_resamples=1000) -> np.ndarray:
-        self.__check_fitted()
-        
-        mod            = clone(self.mod)
-        bootstrap_x    = self.x.to_numpy()
-        bootstrap_data = [bootstrap_x[:,i] for i in range(bootstrap_x.shape[1])]
-        bootstrap_data.append(self.y)
-        def get_boot_coef(*args):
-            x = np.column_stack(args[:-1])
-            y = args[-1]
-            mod.fit(x,y)
-            return mod.coef_
-        self.boot_dist = bootstrap(
-            data             = bootstrap_data,
-            statistic        = get_boot_coef,
-            n_resamples      = n_resamples,
-            confidence_level = 0.5,
-            paired           = True,
-            random_state     = 0
-        ).bootstrap_distribution
-        return self.boot_dist
-    
     def __predict_interval(self,new_x,method='conformal',alpha=0.05) -> pd.DataFrame:
         if method == 'conformal':
             from mapie.regression import MapieRegressor
@@ -142,12 +149,11 @@ class LinearModel:
             })
         
         elif method == 'bootstrap':
-            if self.boot_dist is None:
+            if self.param_dist_boot is None:
                 self.bootstrap_param()
-            param_dist = self.boot_dist.T
             pred_dist = []
             mod = clone(self.mod).fit(self.x,self.y)
-            for param in param_dist:
+            for param in self.param_dist_boot.to_numpy():
                 mod.coef_ = param
                 pred = mod.predict(new_x)
                 pred_dist.append(pred)
