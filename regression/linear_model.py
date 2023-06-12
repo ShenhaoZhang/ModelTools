@@ -18,7 +18,7 @@ class LinearModel:
     def __init__(
         self,
         formula:str,
-        data:dict|pd.DataFrame
+        data:Union[dict,pd.DataFrame]
     ) -> None:
         self.formula   = formula
         self.data      = self.__init_data(data) 
@@ -75,7 +75,8 @@ class LinearModel:
             n_resamples      = n_resamples,
             confidence_level = 0.5,
             paired           = True,
-            random_state     = 0
+            random_state     = 0,
+            vectorized       = False
         ).bootstrap_distribution.T
         
         self.param_dist_boot = pd.DataFrame(
