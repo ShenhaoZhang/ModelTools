@@ -3,7 +3,7 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from scipy.stats import bootstrap
+from scipy.stats import bootstrap,ttest_1samp
 from sklearn import linear_model as lm
 from sklearn.base import clone
 from patsy import dmatrices,dmatrix
@@ -86,7 +86,7 @@ class LinearModel:
         
         return self
     
-    def coef(self,CI_level=0.95) -> pd.DataFrame:
+    def coef(self,CI_level=0.95,alternative='two-sided') -> pd.DataFrame:
         self.__check_fitted()
         
         coef_name  = self.x.columns
@@ -107,7 +107,18 @@ class LinearModel:
                 ],axis=1)
             )
             coef['z'] = coef.Estimate / coef.Std_Error
-            coef = coef.loc[:,['Estimate','Std_Error','z','CI_Low','CI_High']]
+            
+            p_value = []
+            for name in coef_name:
+                value = get_p_value(
+                    self.param_dist_boot.loc[:,name].to_numpy(),
+                    hypothesis=0,
+                    alternative='two_side',
+                )
+                p_value.append(value)
+            coef['p_value'] = p_value
+            
+            coef = coef.loc[:,['Estimate','Std_Error','z','p_value','CI_Low','CI_High']]
         
         return coef
     
@@ -178,6 +189,29 @@ class LinearModel:
     def __check_fitted(self):
         if self.mod is None:
             raise Exception('Need fit first')
+
+def get_p_value(
+    sample:np.ndarray,
+    hypothesis:float,
+    alternative='two_side'
+) -> float:
+    sample    = sample.flatten()
+    n         = len(sample)
+    hypothesis = abs(hypothesis)
+    
+    if alternative == 'two_side':
+        if hypothesis > sample.mean():
+            p_n = np.sum(sample>hypothesis)
+        elif hypothesis < sample.mean():
+            p_n = np.sum(sample<hypothesis)
+        p_value = p_n / n 
+        p_value = p_value * 2
+    elif alternative == 'greater':
+        p_value = np.sum(-hypothesis > sample) / n
+    elif alternative == 'less':
+        p_value = np.sum(hypothesis < sample) / n
+        
+    return p_value
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
