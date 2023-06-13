@@ -5,14 +5,6 @@ import pandas as pd
 from scipy import stats
 from sklearn import metrics
 
-# from ..plot import plot_gg
-# from ..plot import plot_alt
-# from ._base import BaseMetric
-# from ..plot.ts_line import ts_line
-# from ..plot.matrix_scatter import matrix_scatter_wrap
-
-# warnings.filterwarnings("ignore")
-
 class Metric:
     """
     预测效果的评估指标
@@ -31,7 +23,7 @@ class Metric:
         
         # 初始化预测值
         if isinstance(y_pred,np.ndarray):
-            self.y_pred = {'pred':y_pred}
+            self.y_pred = {f'pred_{y_name}':y_pred}
         elif isinstance(y_pred,list):
             pred_name = [f'pred_{i}' for i in range(len(y_pred))]
             self.y_pred = dict(zip(pred_name,y_pred))
@@ -92,7 +84,7 @@ class Metric:
             .pipe(
                 pd.wide_to_long,
                 stubnames = ['pred','resid'],
-                i         = ['index','y'],
+                i         = ['index',self.y_name],
                 j         = 'Method',
                 suffix    = '\w+',
                 sep       = '_'
@@ -188,3 +180,9 @@ class Metric:
             return style
         metric = metric.style.apply(lambda sr:style(sr))
         return metric
+
+if __name__ == '__main__':
+    y_ture = np.random.normal(size=100)
+    y_pred = np.random.normal(loc=y_ture,scale=0.2)
+    metric = Metric(y_ture,y_pred,y_name='abc')
+    print(metric.get_metric())

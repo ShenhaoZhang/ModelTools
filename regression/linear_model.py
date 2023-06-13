@@ -57,8 +57,8 @@ class LinearModel:
         self.train_resid = self.y - self.mod.predict(self.x)
         self.coef_dist_boot = None
         return self
-    
-    def score(self) -> pd.DataFrame:
+
+    def check_model(self):
         ...
 
     def bootstrap_coef(self,n_resamples=1000):
@@ -88,8 +88,19 @@ class LinearModel:
             data    = self.coef_dist_boot,
             columns = self.x.columns
         )
-        
         return self
+    
+    def bootstrap_pred(self,new_x) -> np.ndarray:
+        if self.coef_dist_boot is None:
+            self.bootstrap_coef()
+        mod = clone(self.mod).fit(self.x,self.y)
+        pred_dist = []
+        for coef in self.coef_dist_boot.to_numpy():
+            mod.coef_ = coef
+            pred = mod.predict(new_x)
+            pred_dist.append(pred)
+        pred_dist = np.column_stack(pred_dist)
+        return pred_dist
     
     def get_coef(self, hypothesis:float=0, alternative='two_side', CI_level=0.95) -> pd.DataFrame:
         self.__check_fitted()
@@ -130,6 +141,24 @@ class LinearModel:
             coef = pd.concat([coef,summary],axis=1).loc[:,['Estimate','Std_Error','Z','P_value','CI_Low','CI_High']]
             
         return coef
+    
+    def get_metric(self,bootstrap=False,summary=True,CI_level=0.95) -> pd.DataFrame:
+        from .metric import Metric
+        
+        metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
+        if bootstrap == True:
+            bootstrap_pred = list(self.bootstrap_pred(self.x).T)
+            metric_boot    = Metric(self.y,bootstrap_pred).get_metric()
+            if summary == True:
+                low_level    = (1 - CI_level) / 2
+                high_level   = CI_level + (1 - CI_level) / 2
+                metric_std   = metric_boot.std(axis=0).to_frame().T
+                metric_ci    = metric_boot.quantile([low_level,high_level],axis=0)
+                metric       = pd.concat([metric,metric_std,metric_ci],axis=0)
+                metric.index = ['Estimate','Std_Error','CI_Low','CI_High']
+            else:
+                metric = metric_boot
+        return metric
     
     def plot_coef_dist(self):
         ...
@@ -176,17 +205,9 @@ class LinearModel:
             })
         
         elif method == 'bootstrap':
-            if self.coef_dist_boot is None:
-                self.bootstrap_coef()
-            pred_dist = []
-            mod = clone(self.mod).fit(self.x,self.y)
-            for coef in self.coef_dist_boot.to_numpy():
-                mod.coef_ = coef
-                pred = mod.predict(new_x)
-                pred_dist.append(pred)
-            pred_dist = np.column_stack(pred_dist)
+            pred_dist = self.bootstrap_pred(new_x)
             ci_low ,ci_up  = np.quantile(pred_dist,[alpha/2,1-alpha/2],axis=1)
-            resid_low,resid_up = np.quantile(self.train_resid,[alpha/2,1-alpha/2])
+            resid_low, resid_up = np.quantile(self.train_resid,[alpha/2,1-alpha/2])
             pred_low = resid_low + ci_low
             pred_up  = resid_up + ci_up
             interval = pd.DataFrame({
@@ -204,11 +225,8 @@ class LinearModel:
     def plot_prediction(self):
         ...
     
-    def check_model(self):
-        ...
-    
     def summary(self):
-        # coef score check
+        # coef metric check
         ...
     
     def __check_fitted(self):
