@@ -3,10 +3,11 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from scipy.stats import bootstrap,ttest_1samp
+from scipy.stats import bootstrap
 from sklearn import linear_model as lm
 from sklearn.base import clone
 from patsy import dmatrices,dmatrix
+import matplotlib.pyplot as plt
 
 class LinearModel:
     linear_model = {
@@ -24,7 +25,7 @@ class LinearModel:
         self.data      = self.__init_data(data) 
         self.x,self.y  = self.__model_dataframe(data=self.data,formula=self.formula)
         self.mod       = None
-        self.param_dist_boot = None
+        self.coef_dist_boot = None
     
     def __init_data(self,data) -> pd.DataFrame:
         if isinstance(data,pd.DataFrame):
@@ -54,9 +55,13 @@ class LinearModel:
         self.mod = self.linear_model[method](fit_intercept=False,**method_kwargs)
         self.mod.fit(X=self.x,y=self.y)
         self.train_resid = self.y - self.mod.predict(self.x)
+        self.coef_dist_boot = None
         return self
+    
+    def score(self) -> pd.DataFrame:
+        ...
 
-    def bootstrap_param(self,n_resamples=1000):
+    def bootstrap_coef(self,n_resamples=1000):
         self.__check_fitted()
         
         #TODO 将模型中的超参数固定（包含CV类型的MOD）
@@ -69,7 +74,7 @@ class LinearModel:
             y = args[-1]
             mod.fit(x,y)
             return mod.coef_
-        self.param_dist_boot = bootstrap(
+        self.coef_dist_boot = bootstrap(
             data             = bootstrap_data,
             statistic        = get_boot_coef,
             n_resamples      = n_resamples,
@@ -79,48 +84,58 @@ class LinearModel:
             vectorized       = False
         ).bootstrap_distribution.T
         
-        self.param_dist_boot = pd.DataFrame(
-            data    = self.param_dist_boot,
+        self.coef_dist_boot = pd.DataFrame(
+            data    = self.coef_dist_boot,
             columns = self.x.columns
         )
         
         return self
     
-    def coef(self,CI_level=0.95,alternative='two-sided') -> pd.DataFrame:
+    def get_coef(self, hypothesis:float=0, alternative='two_side', CI_level=0.95) -> pd.DataFrame:
         self.__check_fitted()
         
         coef_name  = self.x.columns
         coef_value = self.mod.coef_.flatten()
         coef       = pd.DataFrame(data={'Estimate':coef_value},index=coef_name)
         
-        if self.param_dist_boot is not None:
+        # 用bootstrap方法对参数进行统计推断
+        if self.coef_dist_boot is not None:
             low_level  = (1 - CI_level) / 2
             high_level = CI_level + (1 - CI_level) / 2
-            coef = (
-                pd.concat([
-                    coef,
-                    pd.DataFrame({
-                        'Std_Error': np.std(self.param_dist_boot,axis=0),
-                        'CI_Low'   : np.quantile(self.param_dist_boot,low_level,axis=0),
-                        'CI_High'  : np.quantile(self.param_dist_boot,high_level,axis=0),
-                        },index=coef_name)
-                ],axis=1)
-            )
-            coef['z'] = coef.Estimate / coef.Std_Error
+            ci_low     = np.quantile(self.coef_dist_boot,low_level,axis=0)
+            ci_high    = np.quantile(self.coef_dist_boot,high_level,axis=0)
+            std_error  = np.std(self.coef_dist_boot,axis=0)
+            z_score    = (coef.Estimate - hypothesis) / std_error
             
             p_value = []
             for name in coef_name:
                 value = get_p_value(
-                    self.param_dist_boot.loc[:,name].to_numpy(),
-                    hypothesis=0,
-                    alternative='two_side',
+                    self.coef_dist_boot.loc[:,name].to_numpy(),
+                    hypothesis  = hypothesis,
+                    alternative = alternative,
                 )
                 p_value.append(value)
-            coef['p_value'] = p_value
             
-            coef = coef.loc[:,['Estimate','Std_Error','z','p_value','CI_Low','CI_High']]
-        
+            summary = pd.DataFrame(
+                {
+                    'Std_Error': std_error,
+                    'Z'        : z_score,
+                    'P_value'  : p_value,
+                    'CI_Low'   : ci_low,
+                    'CI_High'  : ci_high
+                },
+                index = coef_name
+            )
+            
+            coef = pd.concat([coef,summary],axis=1).loc[:,['Estimate','Std_Error','Z','P_value','CI_Low','CI_High']]
+            
         return coef
+    
+    def plot_coef_dist(self):
+        ...
+    
+    def plot_coef_pair(self):
+        ...
     
     def predict(self,new_data:pd.DataFrame=None,alpha=0.05,ci_method='conformal') -> pd.DataFrame:
         self.__check_fitted()
@@ -150,7 +165,7 @@ class LinearModel:
         predictions = pd.concat(predictions,axis=1)
         
         return predictions
-
+    
     def __predict_interval(self,new_x,method='conformal',alpha=0.05) -> pd.DataFrame:
         if method == 'conformal':
             from mapie.regression import MapieRegressor
@@ -161,12 +176,12 @@ class LinearModel:
             })
         
         elif method == 'bootstrap':
-            if self.param_dist_boot is None:
-                self.bootstrap_param()
+            if self.coef_dist_boot is None:
+                self.bootstrap_coef()
             pred_dist = []
             mod = clone(self.mod).fit(self.x,self.y)
-            for param in self.param_dist_boot.to_numpy():
-                mod.coef_ = param
+            for coef in self.coef_dist_boot.to_numpy():
+                mod.coef_ = coef
                 pred = mod.predict(new_x)
                 pred_dist.append(pred)
             pred_dist = np.column_stack(pred_dist)
@@ -186,42 +201,51 @@ class LinearModel:
         
         return interval
     
+    def plot_prediction(self):
+        ...
+    
+    def check_model(self):
+        ...
+    
+    def summary(self):
+        # coef score check
+        ...
+    
     def __check_fitted(self):
         if self.mod is None:
             raise Exception('Need fit first')
 
-def get_p_value(
-    sample:np.ndarray,
-    hypothesis:float,
-    alternative='two_side'
-) -> float:
+def get_p_value(sample:np.ndarray, hypothesis:float, alternative='two_side') -> float:
     sample    = sample.flatten()
     n         = len(sample)
     hypothesis = abs(hypothesis)
+
+    n_less    = np.sum(sample>hypothesis)
+    n_greater = np.sum(sample<hypothesis)
     
     if alternative == 'two_side':
-        if hypothesis > sample.mean():
-            p_n = np.sum(sample>hypothesis)
-        elif hypothesis < sample.mean():
-            p_n = np.sum(sample<hypothesis)
-        p_value = p_n / n 
-        p_value = p_value * 2
+        p_value = min(n_less,n_greater) / n * 2
     elif alternative == 'greater':
-        p_value = np.sum(-hypothesis > sample) / n
+        p_value = n_greater / n
     elif alternative == 'less':
-        p_value = np.sum(hypothesis < sample) / n
+        p_value = n_less / n
+    else:
+        raise Exception(f'WRONG alternative({alternative})')
         
     return p_value
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
+    from statsmodels.formula.api import ols
     
     rng = np.random.default_rng(0)
     x   = rng.normal(0,0.1,1000).cumsum()
     y   = rng.standard_t(df=1,size=1000)+3+2*x+x**2
-    m   = LinearModel('y~x+I(x*x)',data={'x':x,'y':y}).fit(method='HUBER')
-    m.bootstrap_param(n_resamples=1000)
-    print('coef',m.coef())
+    
+    m   = LinearModel('y~x+I(x**2)+I(x**3)',data={'x':x,'y':y}).fit(method='HUBER')
+    m.bootstrap_coef(n_resamples=1000)
+    
+    print('coef',m.get_coef())
     print(m.predict(ci_method='bootstrap'))
     
     # pred = m.predict()
