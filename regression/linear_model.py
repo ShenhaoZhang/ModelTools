@@ -14,8 +14,20 @@ class LinearModel:
         'OLS'  : lm.LinearRegression,
         'HUBER': lm.HuberRegressor,
         'EN'   : lm.ElasticNetCV,
-        'LASSO': lm.LassoCV
+        'LASSO': lm.LassoCV,
+        'QR'   : lm.QuantileRegressor,
     }
+    default_params = {
+        'QR' : {
+            'solver' : 'highs'
+        }
+    }
+    cv_params = {
+        'QR' : {
+            'alpha' : [0,.1,.5,.7,.9,.95,.99,1]
+        }
+    }
+    
     def __init__(
         self,
         formula:str,
@@ -51,8 +63,18 @@ class LinearModel:
             return x
     
     def fit(self,method='OLS',method_kwargs:dict=None):
+        
+        # 模型默认参数
+        mod_default_params = self.default_params.get(method,{})
+        # 模型指定参数
         method_kwargs = {} if method_kwargs is None else method_kwargs
-        self.mod = self.linear_model[method](fit_intercept=False,**method_kwargs)
+        
+        # 合并参数
+        mod_default_params.update(method_kwargs)
+        
+        #TODO 交叉验证寻找超参数
+        
+        self.mod = self.linear_model[method](fit_intercept=False,**mod_default_params)
         self.mod.fit(X=self.x,y=self.y)
         self.train_resid = self.y - self.mod.predict(self.x)
         self.coef_dist_boot = None
