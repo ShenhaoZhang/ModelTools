@@ -90,9 +90,11 @@ class LinearModel:
         )
         return self
     
-    def bootstrap_pred(self,new_x) -> np.ndarray:
+    def bootstrap_pred(self,new_x=None) -> np.ndarray:
         if self.coef_dist_boot is None:
             self.bootstrap_coef()
+        if new_x is None:
+            new_x = self.x
         mod = clone(self.mod).fit(self.x,self.y)
         pred_dist = []
         for coef in self.coef_dist_boot.to_numpy():
