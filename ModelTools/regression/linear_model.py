@@ -3,19 +3,18 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from scipy.stats import bootstrap,norm
-from sklearn import linear_model as lm
+from scipy.stats import bootstrap
 from sklearn.base import clone
+from sklearn import linear_model as lm
 from sklearn.model_selection import GridSearchCV
 from patsy import dmatrices,dmatrix
-import matplotlib.pyplot as plt
 
 class LinearModel:
     linear_model = {
         'OLS'  : lm.LinearRegression,
         'HUBER': lm.HuberRegressor,
         'EN'   : lm.ElasticNetCV,
-        'LASSO': lm.LassoCV,
+        'LASSO': lm.Lasso,
         'QR'   : lm.QuantileRegressor,
     }
     default_param = {
@@ -26,7 +25,10 @@ class LinearModel:
     cv_param_grid = {
         'QR' : {
             'alpha' : [0,.1,.5,.7,.9,.95,.99,1]
-        }
+        },
+        'LASSO':{
+            'alpha' : [1e-06, 1e-05, 1e-04, 1e-03, 1e-02, 1e-01, 1e+00, 1e+01,1e+02, 1e+03, 1e+04, 1e+05, 1e+06]
+        },
     }
     
     def __init__(
@@ -116,7 +118,8 @@ class LinearModel:
             confidence_level = 0.5,
             paired           = True,
             random_state     = 0,
-            vectorized       = False
+            vectorized       = False,
+            method           = 'percentile'
         ).bootstrap_distribution.T
         
         self.coef_dist_boot = pd.DataFrame(
@@ -192,7 +195,7 @@ class LinearModel:
                 metric_std   = metric_boot.std(axis=0,ddof=1).to_frame().T
                 metric_ci    = metric_boot.quantile([lower_level,upper_level],axis=0)
                 metric       = pd.concat([metric,metric_std,metric_ci],axis=0)
-                metric.index = ['estimate','std_error','ci_lower','upper']
+                metric.index = ['estimate','std_error','ci_lower','ci_upper']
             else:
                 metric = metric_boot
         return metric
