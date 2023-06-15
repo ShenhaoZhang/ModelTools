@@ -3,7 +3,7 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from scipy.stats import bootstrap
+from scipy.stats import bootstrap,norm
 from sklearn import linear_model as lm
 from sklearn.base import clone
 from sklearn.model_selection import GridSearchCV
@@ -88,7 +88,7 @@ class LinearModel:
         self.train_resid = self.y - self.mod.predict(self.x)
         
         if bootstrap == True:
-            self.bootstrap_coef(n_resamples=1000,re_boot=False)
+            self.bootstrap_coef(n_resamples=1000,re_boot=True)
         else:
             self.coef_dist_boot = None
         
@@ -144,16 +144,16 @@ class LinearModel:
         
         coef_name  = self.x.columns
         coef_value = self.mod.coef_.flatten()
-        coef       = pd.DataFrame(data={'Estimate':coef_value},index=coef_name)
+        coef       = pd.DataFrame(data={'estimate':coef_value},index=coef_name)
         
         # 用bootstrap方法对参数进行统计推断
         if self.coef_dist_boot is not None:
-            low_level  = (1 - CI_level) / 2
-            high_level = CI_level + (1 - CI_level) / 2
-            ci_low     = np.quantile(self.coef_dist_boot,low_level,axis=0)
-            ci_high    = np.quantile(self.coef_dist_boot,high_level,axis=0)
-            std_error  = np.std(self.coef_dist_boot,axis=0)
-            z_score    = (coef.Estimate - hypothesis) / std_error
+            low_level = (1 - CI_level) / 2
+            up_level  = CI_level + (1 - CI_level) / 2
+            ci_lower  = np.quantile(self.coef_dist_boot,low_level,axis=0)
+            ci_upper  = np.quantile(self.coef_dist_boot,up_level,axis=0)
+            std_error = np.std(self.coef_dist_boot,axis=0)
+            z_score   = (coef.estimate - hypothesis) / std_error
             
             p_value = []
             for name in coef_name:
@@ -166,16 +166,16 @@ class LinearModel:
             
             summary = pd.DataFrame(
                 {
-                    'Std_Error': std_error,
-                    'Z'        : z_score,
-                    'P_value'  : p_value,
-                    'CI_Low'   : ci_low,
-                    'CI_High'  : ci_high
+                    'std_Error': std_error,
+                    'z'        : z_score,
+                    'p_value'  : p_value,
+                    'ci_lower' : ci_lower,
+                    'ci_upper' : ci_upper
                 },
                 index = coef_name
             )
             
-            coef = pd.concat([coef,summary],axis=1).loc[:,['Estimate','Std_Error','Z','P_value','CI_Low','CI_High']]
+            coef = pd.concat([coef,summary],axis=1).loc[:,['estimate','std_Error','z','p_value','ci_lower','ci_upper']]
             
         return coef
     
@@ -187,12 +187,12 @@ class LinearModel:
             bootstrap_pred = list(self.bootstrap_pred(self.x).T)
             metric_boot    = Metric(self.y,bootstrap_pred).get_metric()
             if summary == True:
-                low_level    = (1 - CI_level) / 2
-                high_level   = CI_level + (1 - CI_level) / 2
+                lower_level  = (1 - CI_level) / 2
+                upper_level  = CI_level + (1 - CI_level) / 2
                 metric_std   = metric_boot.std(axis=0,ddof=1).to_frame().T
-                metric_ci    = metric_boot.quantile([low_level,high_level],axis=0)
+                metric_ci    = metric_boot.quantile([lower_level,upper_level],axis=0)
                 metric       = pd.concat([metric,metric_std,metric_ci],axis=0)
-                metric.index = ['Estimate','Std_Error','CI_Low','CI_High']
+                metric.index = ['estimate','std_error','ci_lower','upper']
             else:
                 metric = metric_boot
         return metric
@@ -203,7 +203,7 @@ class LinearModel:
     def plot_coef_pair(self):
         ...
     
-    def predict(self,new_data:pd.DataFrame=None,alpha=0.05,ci_method='conformal') -> pd.DataFrame:
+    def predict(self,new_data:pd.DataFrame=None,alpha=0.05,ci_method='bootstrap') -> pd.DataFrame:
         self.__check_fitted()
         
         if new_data is None:
@@ -223,7 +223,7 @@ class LinearModel:
         # 区间预测
         interval = self.__predict_interval(new_x,alpha=alpha,method=ci_method)
         
-        predictions = [pd.DataFrame({'pred' : pred}),interval]
+        predictions = [pd.DataFrame({'mean' : pred}),interval]
         if new_data is None:
             predictions.append(self.data)
         else:
@@ -243,15 +243,17 @@ class LinearModel:
         
         elif method == 'bootstrap':
             pred_dist = self.bootstrap_pred(new_x)
-            ci_low ,ci_up  = np.quantile(pred_dist,[alpha/2,1-alpha/2],axis=1)
+            mean_se   = np.std(pred_dist,axis=1)
+            mean_ci_lower ,mean_ci_upper  = np.quantile(pred_dist,[alpha/2,1-alpha/2],axis=1)
             resid_low, resid_up = np.quantile(self.train_resid,[alpha/2,1-alpha/2])
-            pred_low = resid_low + ci_low
-            pred_up  = resid_up + ci_up
+            obs_ci_lower = resid_low + mean_ci_lower
+            obs_ci_upper  = resid_up + mean_ci_upper
             interval = pd.DataFrame({
-                'pred_low': pred_low,
-                'pred_up' : pred_up,
-                'ci_low'  : ci_low,
-                'ci_up'   : ci_up
+                'mean_se'      : mean_se,
+                'mean_ci_lower': mean_ci_lower,
+                'mean_ci_upper': mean_ci_upper,
+                'obs_ci_lower' : obs_ci_lower,
+                'obs_ci_upper' : obs_ci_upper,
             })
             
         else:
