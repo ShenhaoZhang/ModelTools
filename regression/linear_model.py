@@ -6,6 +6,7 @@ import pandas as pd
 from scipy.stats import bootstrap
 from sklearn import linear_model as lm
 from sklearn.base import clone
+from sklearn.model_selection import GridSearchCV
 from patsy import dmatrices,dmatrix
 import matplotlib.pyplot as plt
 
@@ -17,12 +18,12 @@ class LinearModel:
         'LASSO': lm.LassoCV,
         'QR'   : lm.QuantileRegressor,
     }
-    default_params = {
+    default_param = {
         'QR' : {
             'solver' : 'highs'
         }
     }
-    cv_params = {
+    cv_param_grid = {
         'QR' : {
             'alpha' : [0,.1,.5,.7,.9,.95,.99,1]
         }
@@ -62,31 +63,43 @@ class LinearModel:
             x = matrix_to_df(matrix) 
             return x
     
-    def fit(self,method='OLS',method_kwargs:dict=None):
+    def fit(self,method='OLS',method_kwargs:dict=None,bootstrap=True):
         
         # 模型默认参数
-        mod_default_params = self.default_params.get(method,{})
+        mod_default_param = self.default_param.get(method,{})
         # 模型指定参数
         method_kwargs = {} if method_kwargs is None else method_kwargs
-        
         # 合并参数
-        mod_default_params.update(method_kwargs)
+        mod_default_param.update(method_kwargs)
         
-        #TODO 交叉验证寻找超参数
-        
-        self.mod = self.linear_model[method](fit_intercept=False,**mod_default_params)
-        self.mod.fit(X=self.x,y=self.y)
+        mod = self.linear_model[method](fit_intercept=False,**mod_default_param)
+        if method in self.cv_param_grid.keys():
+            # 交叉验证寻找超参数
+            cv = GridSearchCV(
+                estimator  = mod,
+                param_grid = self.cv_param_grid[method],
+                n_jobs     = -1,
+                refit      = True,
+                cv         = 5
+            )
+            self.mod = cv.fit(X=self.x,y=self.y).best_estimator_
+        else:
+            self.mod = mod.fit(X=self.x, y=self.y)
         self.train_resid = self.y - self.mod.predict(self.x)
-        self.coef_dist_boot = None
+        
+        if bootstrap == True:
+            self.bootstrap_coef(n_resamples=1000,re_boot=False)
+        else:
+            self.coef_dist_boot = None
+        
         return self
 
     def check_model(self):
         ...
 
-    def bootstrap_coef(self,n_resamples=1000):
+    def bootstrap_coef(self,n_resamples=1000,re_boot=False):
         self.__check_fitted()
         
-        #TODO 将模型中的超参数固定（包含CV类型的MOD）
         mod            = clone(self.mod)
         bootstrap_x    = self.x.to_numpy()
         bootstrap_data = [bootstrap_x[:,i] for i in range(bootstrap_x.shape[1])]
@@ -166,17 +179,17 @@ class LinearModel:
             
         return coef
     
-    def get_metric(self,bootstrap=False,summary=True,CI_level=0.95) -> pd.DataFrame:
+    def get_metric(self,bootstrap=True,summary=True,CI_level=0.95) -> pd.DataFrame:
         from .metric import Metric
         
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
-        if bootstrap == True:
+        if (bootstrap == True) and (self.bootstrap_coef is not None):
             bootstrap_pred = list(self.bootstrap_pred(self.x).T)
             metric_boot    = Metric(self.y,bootstrap_pred).get_metric()
             if summary == True:
                 low_level    = (1 - CI_level) / 2
                 high_level   = CI_level + (1 - CI_level) / 2
-                metric_std   = metric_boot.std(axis=0).to_frame().T
+                metric_std   = metric_boot.std(axis=0,ddof=1).to_frame().T
                 metric_ci    = metric_boot.quantile([low_level,high_level],axis=0)
                 metric       = pd.concat([metric,metric_std,metric_ci],axis=0)
                 metric.index = ['Estimate','Std_Error','CI_Low','CI_High']
