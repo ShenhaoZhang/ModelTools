@@ -6,10 +6,7 @@ import pandas as pd
 from scipy import stats
 from tabulate import tabulate
 
-from ..plot.matrix_scatter import matrix_scatter
-from ..plot.ts2_scatter import ts2_scatter
-
-class Data:
+class DataExplorer:
     
     def __init__(
         self,
@@ -22,10 +19,13 @@ class Data:
         self.data       = data.copy()
         self.data_n_row = self.data.shape[0] #FIXME data可能是字典
         self.data_n_col = self.data.shape[1]
+        
         self.col_x      = col_x if col_x is not None else self.data.columns.to_list()
         self.col_x      = self.col_x if isinstance(self.col_x,list) else [self.col_x]
+        
         self.col_y      = col_y if col_y is not None else []
         self.col_y      = self.col_y if isinstance(self.col_y,list) else [self.col_y]
+        
         self.col_xy     = [*self.col_x,*self.col_y]
         self.col_ts     = col_ts
         self.col_group  = col_group if not isinstance(col_group,str) else [col_group]
@@ -162,12 +162,18 @@ class Data:
     def plot_ts(self):
         ...
     
-    def plot_ts2_scatter(self,col_x:str,col_y:str,col_ts=None):
-        plot = ts2_scatter(data=self.data,x=col_x,y=col_y,ts=col_ts)
-        return plot
+    # def plot_ts2_scatter(self,col_x:str,col_y:str,col_ts=None):
+    #     plot = ts2_scatter(data=self.data,x=col_x,y=col_y,ts=col_ts)
+    #     return plot
         
         
-    def plot_scatter_matrix(self):
-        plot = matrix_scatter(self.data.loc[:,self.col_xy])
-        return plot
-    
+    # def plot_scatter_matrix(self):
+    #     plot = matrix_scatter(self.data.loc[:,self.col_xy])
+    #     return plot
+
+if __name__ == '__main__':
+    df = pd.DataFrame({
+        'x1':np.random.normal(loc=2,scale=1,size=100),
+        'x2':np.random.normal(loc=3,scale=2,size=100)
+    })
+    print(DataExplorer(df).summary())

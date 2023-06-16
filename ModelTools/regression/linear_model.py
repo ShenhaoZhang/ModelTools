@@ -98,6 +98,9 @@ class LinearModel:
 
     def check_model(self):
         ...
+    
+    def plot_check(self):
+        ...
 
     def bootstrap_coef(self,n_resamples=1000,re_boot=False):
         self.__check_fitted()
@@ -106,11 +109,13 @@ class LinearModel:
         bootstrap_x    = self.x.to_numpy()
         bootstrap_data = [bootstrap_x[:,i] for i in range(bootstrap_x.shape[1])]
         bootstrap_data.append(self.y)
+        
         def get_boot_coef(*args):
             x = np.column_stack(args[:-1])
             y = args[-1]
             mod.fit(x,y)
             return mod.coef_
+        
         self.coef_dist_boot = bootstrap(
             data             = bootstrap_data,
             statistic        = get_boot_coef,
@@ -133,6 +138,7 @@ class LinearModel:
             self.bootstrap_coef()
         if new_x is None:
             new_x = self.x
+            
         mod = clone(self.mod).fit(self.x,self.y)
         pred_dist = []
         for coef in self.coef_dist_boot.to_numpy():
@@ -140,6 +146,7 @@ class LinearModel:
             pred = mod.predict(new_x)
             pred_dist.append(pred)
         pred_dist = np.column_stack(pred_dist)
+        
         return pred_dist
     
     def get_coef(self, hypothesis:float=0, alternative='two_side', CI_level=0.95) -> pd.DataFrame:
@@ -216,7 +223,7 @@ class LinearModel:
             data = self.data
         
         elif new_data is None and data_grid is not None:
-            from .data_grid import DataGrid
+            from ..utils.data_grid import DataGrid
             y_col = re.findall('(.+)~',self.formula)
             data  = DataGrid(self.data.drop(y_col,axis=1)).get_grid(**data_grid)
         
@@ -271,43 +278,20 @@ class LinearModel:
         return interval
     
     def plot_prediction(self,ci_type:Union[str,list]='mean',**predict_kwargs):
+        from ..plot.prediction import plot_prediction
+        
         if 'data_grid' not in predict_kwargs:
             raise Exception('WRONG')
+        
         prediction = self.predict(**predict_kwargs)
-        plot_var = list(predict_kwargs['data_grid'].keys())
+        plot_var   = list(predict_kwargs['data_grid'].keys())
         
-        import plotnine as gg 
-        # if len(plot_var)>4:
-        #     raise Exception('WRONG')
-        aes = {'x':plot_var[0],'y':'mean'}
-        if len(plot_var) >= 2:
-            aes['color'] = f'factor({plot_var[1]})'
-            aes['fill']  = f'factor({plot_var[1]})'
-        
-        plot = (
-            prediction
-            .round(2)
-            .pipe(gg.ggplot)
-            + gg.aes(**aes)
-            + gg.geom_line()
-            # + gg.geom_rug(gg.aes(x=plot_var[0]),data=self.data,inherit_aes=False)
+        plot       = plot_prediction(
+            data     = prediction,
+            plot_var = plot_var,
+            ci_type  = ci_type
         )
-        
-        # 区间估计
-        ci_type = [ci_type] if not isinstance(ci_type,list) else ci_type
-        for ci in ci_type:
-            ci_lower = ci + '_ci_lower'
-            ci_upper = ci + '_ci_upper'
-            plot += gg.geom_ribbon(gg.aes(ymin=ci_lower,ymax=ci_upper),alpha=0.3,outline_type=None)
-        
-        # 分面
-        if len(plot_var) >= 3:
-            facets = f'.~{plot_var[2]}' if len(plot_var) == 3 else plot_var[2:4]
-            facet_grid = gg.facet_grid(facets=facets,labeller='label_both')
-            plot += facet_grid
-        
-        # plot += gg.geom_rug(gg.aes(x=plot_var[0]),data=self.data,inherit_aes=False)
-        
+
         return plot
         
     
