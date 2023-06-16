@@ -206,18 +206,24 @@ class LinearModel:
     def plot_coef_pair(self):
         ...
     
-    def predict(self,new_data:pd.DataFrame=None,alpha=0.05,ci_method='bootstrap') -> pd.DataFrame:
+    def predict(self, new_data:pd.DataFrame=None, data_grid:dict=None, alpha=0.05, ci_method='bootstrap') -> pd.DataFrame:
         self.__check_fitted()
         
-        if new_data is None:
+        if new_data is not None and data_grid is not None:
+            raise Exception('WRONG')
+        
+        elif new_data is None and data_grid is None:
             data = self.data
-        elif isinstance(new_data,dict):
+        
+        elif new_data is None and data_grid is not None:
             from .data_grid import DataGrid
             y_col = re.findall('(.+)~',self.formula)
-            data = DataGrid(self.data.drop(y_col,axis=1)).get_grid(**new_data)
-        else:
+            data  = DataGrid(self.data.drop(y_col,axis=1)).get_grid(**data_grid)
+        
+        elif new_data is not None and data_grid is None:
             data = self.__init_data(new_data)
-            
+        
+        
         formula_x = re.findall('~(.+)',self.formula)[0]
         new_x     = self.__model_dataframe(data,formula=formula_x)
         
@@ -227,7 +233,7 @@ class LinearModel:
         interval = self.__predict_interval(new_x,alpha=alpha,method=ci_method)
         
         predictions = [pd.DataFrame({'mean' : pred}),interval]
-        if new_data is None:
+        if new_data is None and data_grid is None:
             predictions.append(self.data)
         else:
             predictions.append(data)
@@ -240,8 +246,8 @@ class LinearModel:
             from mapie.regression import MapieRegressor
             pred_interval = MapieRegressor(self.mod).fit(self.x,self.y).predict(new_x,alpha=alpha)[1]
             interval = pd.DataFrame({
-                'pred_low':pred_interval[:,0,:].flatten(),
-                'pred_up':pred_interval[:,1,:].flatten()
+                'obs_ci_low':pred_interval[:,0,:].flatten(),
+                'obs_ci_up':pred_interval[:,1,:].flatten()
             })
         
         elif method == 'bootstrap':
@@ -264,8 +270,37 @@ class LinearModel:
         
         return interval
     
-    def plot_prediction(self):
-        ...
+    def plot_prediction(self,**predict_kwargs):
+        if 'data_grid' not in predict_kwargs:
+            raise Exception('WRONG')
+        prediction = self.predict(**predict_kwargs)
+        plot_var = list(predict_kwargs['data_grid'].keys())
+        
+        import plotnine as gg 
+        # if len(plot_var)>4:
+        #     raise Exception('WRONG')
+        aes = {'x':plot_var[0],'y':'mean'}
+        if len(plot_var) >= 2:
+            aes['color'] = f'factor({plot_var[1]})'
+            aes['fill']  = f'factor({plot_var[1]})'
+        plot = (
+            prediction
+            .pipe(gg.ggplot)
+            + gg.aes(**aes)
+            + gg.geom_line()
+            + gg.geom_ribbon(gg.aes(ymin='mean_ci_lower',ymax='mean_ci_upper'),alpha=0.3,outline_type=None)
+            # + gg.geom_ribbon(gg.aes(ymin='obs_ci_lower',ymax='obs_ci_upper'),alpha=0.3,outline_type=None)
+            # + gg.geom_rug(gg.aes(x=plot_var[0]),data=self.data,inherit_aes=False)
+        )
+        if len(plot_var) >= 3:
+            facets = f'.~{plot_var[2]}' if len(plot_var) == 3 else plot_var[2:4]
+            facet_grid = gg.facet_grid(facets=facets,labeller='label_both')
+            plot += facet_grid
+        
+        # plot += gg.geom_rug(gg.aes(x=plot_var[0]),data=self.data,inherit_aes=False)
+        
+        return plot
+        
     
     def summary(self):
         # coef metric check
