@@ -1,11 +1,8 @@
+import re
 from functools import reduce
 
 import numpy as np
 import pandas as pd
-
-# 指定函数
-# 指定向量
-# 指定原数据
 
 class DataGrid:
     def __init__(self,data:pd.DataFrame) -> None:
@@ -27,6 +24,38 @@ class DataGrid:
         result = pd.DataFrame({var_name:[var_method(self.data[var_name])]})
         return result
     
+    def process_by_shortcut(self,var_name,var_method) -> pd.DataFrame:
+        var_value = self.data.loc[:,var_name].to_numpy()
+        
+        if 'line' in var_method:
+            num       = re.findall('line(\d+)',var_method)
+            num       = int(num[0]) if len(num)>0 else 30
+            min_value = var_value.min()
+            max_value = var_value.max()
+            result    = np.linspace(min_value,max_value,num)
+            
+        elif var_method == 'minmax':
+            min_value = var_value.min()
+            max_value = var_value.max()
+            result    = [min_value,max_value]
+        
+        elif var_method == 'quantile':
+            result = np.quantile(var_value,q=[0.25,0.5,0.75])
+        
+        elif var_method == 'meansd':
+            mean   = np.mean(var_value)
+            sd     = np.std(var_value)
+            result = [mean-sd,mean+sd]
+        
+        elif var_method == 'raw':
+            result = np.unique(var_value)
+        
+        else:
+            raise Exception(f'WRONG {var_name}')
+        
+        result = pd.DataFrame({var_name:result})
+        return result
+    
     def get_grid(self,**variable):
         variable = variable.copy()
         finish_var = []
@@ -37,6 +66,9 @@ class DataGrid:
                 continue
             else:
                 finish_var.append(var_name)
+            
+            if isinstance(var_method,(int,float)):
+                var_method = [var_method]
             
             # 指定值
             if isinstance(var_method,(list,np.ndarray,pd.Series)):
@@ -49,7 +81,11 @@ class DataGrid:
                 var_result = [var_result] if not isinstance(var_result,(list,np.ndarray)) else var_result
                 self.var_data.append(pd.DataFrame({var_name:var_result}))
             
-            #TODO 指定字符 函数快捷方式 std minmax quantile
+            # 指定字符 函数快捷方式 std minmax quantile
+            elif isinstance(var_method,str):
+                var_result = self.process_by_shortcut(var_name,var_method)
+                self.var_data.append(var_result)
+            
             else:
                 raise Exception('WRONG var_method')
             
@@ -82,6 +118,6 @@ if __name__ == '__main__':
     })
     dg = DataGrid(data)
     print(dg.detect_type())
-    print(dg.get_grid())
+    print(dg.get_grid(a=[1,2,3],c=['x'],b='minmax'))
     
     
