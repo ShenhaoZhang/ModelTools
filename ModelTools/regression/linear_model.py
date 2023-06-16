@@ -207,8 +207,13 @@ class LinearModel:
                 metric = metric_boot
         return metric
     
-    def plot_coef_dist(self):
-        ...
+    def plot_coef_dist(self,**plot_kwargs):
+        from .plot.distribution import plot_distribution
+        plot = plot_distribution(
+            data = self.coef_dist_boot,
+            **plot_kwargs
+        )
+        return plot
     
     def plot_coef_pair(self):
         ...
@@ -278,7 +283,7 @@ class LinearModel:
         return interval
     
     def plot_prediction(self,ci_type:Union[str,list]='mean',**predict_kwargs):
-        from ..plot.prediction import plot_prediction
+        from .plot.prediction import plot_prediction
         
         if 'data_grid' not in predict_kwargs:
             raise Exception('WRONG')
