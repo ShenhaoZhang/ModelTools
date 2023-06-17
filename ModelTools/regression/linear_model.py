@@ -37,6 +37,7 @@ class LinearModel:
         data:Union[dict,pd.DataFrame]
     ) -> None:
         self.formula   = formula
+        self.y_col     = re.findall('(.+)~',self.formula)[0]
         self.data      = self.__init_data(data) 
         self.x,self.y  = self.__model_dataframe(data=self.data,formula=self.formula)
         self.mod       = None
@@ -100,7 +101,18 @@ class LinearModel:
         ...
     
     def plot_check(self):
-        ...
+        from .plot.check_model import plot_check_model
+        ppc_n_resample = 100
+        pred = self.predict(ci_method=None).loc[:,'mean'].to_numpy()
+        boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
+        boot_pred += np.random.choice(self.train_resid,size=boot_pred.shape)
+        plot = plot_check_model(
+            residual     = self.train_resid,
+            fitted_value = pred,
+            boot_pred    = boot_pred,
+            y_name       = self.y_col
+        )
+        return plot
 
     def bootstrap_coef(self,n_resamples=1000,re_boot=False):
         self.__check_fitted()
@@ -133,7 +145,7 @@ class LinearModel:
         )
         return self
     
-    def bootstrap_pred(self,new_x=None) -> np.ndarray:
+    def bootstrap_pred(self,new_x=None,n_resample=None) -> np.ndarray:
         if self.coef_dist_boot is None:
             self.bootstrap_coef()
         if new_x is None:
@@ -141,7 +153,16 @@ class LinearModel:
             
         mod = clone(self.mod).fit(self.x,self.y)
         pred_dist = []
-        for coef in self.coef_dist_boot.to_numpy():
+        
+        coef_dist_boot  = self.coef_dist_boot.to_numpy()
+        n_coef_resample = coef_dist_boot.shape[0]
+        if (n_resample is not None) and (n_coef_resample >= n_resample):
+            coef_dist_boot = coef_dist_boot[0:n_resample,:]
+        else:
+            ...
+            #TODO 
+            
+        for coef in coef_dist_boot:
             mod.coef_ = coef
             pred = mod.predict(new_x)
             pred_dist.append(pred)
@@ -229,8 +250,7 @@ class LinearModel:
         
         elif new_data is None and data_grid is not None:
             from ..utils.data_grid import DataGrid
-            y_col = re.findall('(.+)~',self.formula)
-            data  = DataGrid(self.data.drop(y_col,axis=1)).get_grid(**data_grid)
+            data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
         
         elif new_data is not None and data_grid is None:
             data = self.__init_data(new_data)
@@ -242,7 +262,10 @@ class LinearModel:
         # 点预测
         pred = self.mod.predict(new_x).flatten()
         # 区间预测
-        interval = self.__predict_interval(new_x,alpha=alpha,method=ci_method)
+        if ci_method is not None:
+            interval = self.__predict_interval(new_x,alpha=alpha,method=ci_method)
+        else:
+            interval = None
         
         predictions = [pd.DataFrame({'mean' : pred}),interval]
         if new_data is None and data_grid is None:
