@@ -100,12 +100,12 @@ class LinearModel:
     def check_model(self):
         ...
     
-    def plot_check(self):
+    def plot_check(self,ppc_n_resample=50):
         from .plot.check_model import plot_check_model
-        ppc_n_resample = 100
         pred = self.predict(ci_method=None).loc[:,'mean'].to_numpy()
         boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
-        boot_pred += np.random.choice(self.train_resid,size=boot_pred.shape)
+        boot_pred += np.random.choice(self.train_resid,size=boot_pred.shape,replace=True)
+        # boot_pred += np.random.normal(loc=0,scale=self.train_resid.std(),size=boot_pred.shape)
         plot = plot_check_model(
             residual     = self.train_resid,
             fitted_value = pred,
