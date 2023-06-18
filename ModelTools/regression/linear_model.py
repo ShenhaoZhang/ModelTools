@@ -97,9 +97,6 @@ class LinearModel:
         
         return self
 
-    def check_model(self):
-        ...
-    
     def plot_check(self,ppc_n_resample=50):
         from .plot.check_model import plot_check_model
         pred = self.predict(ci_method=None).loc[:,'mean'].to_numpy()
@@ -324,8 +321,15 @@ class LinearModel:
         
     
     def summary(self):
-        # coef metric check
-        ...
+        coef_info   = self.get_coef()
+        metric_info = self.get_metric()
+        from .._src.tabulate import tabulate
+        print(
+            tabulate(coef_info,headers='keys')
+        )
+        print(
+            tabulate(metric_info,headers='keys')
+        )
     
     def __check_fitted(self):
         if self.mod is None:
@@ -359,7 +363,8 @@ if __name__ == '__main__':
     y   = rng.standard_t(df=1,size=1000)+3+2*x+x**2
     
     m   = LinearModel('y~x+I(x**2)+I(x**3)',data={'x':x,'y':y}).fit(method='HUBER')
-    m.bootstrap_coef(n_resamples=1000)
+    # m.bootstrap_coef(n_resamples=1000)
+    # m.summary()
     
     print('coef',m.get_coef())
     print(m.predict(ci_method='bootstrap'))
