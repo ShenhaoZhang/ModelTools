@@ -7,7 +7,7 @@ from scipy.stats import bootstrap
 from sklearn.base import clone
 from sklearn import linear_model as lm
 from sklearn.model_selection import GridSearchCV
-from patsy import dmatrices,dmatrix
+from patsy import dmatrices,build_design_matrices
 
 class LinearModel:
     linear_model = {
@@ -58,12 +58,14 @@ class LinearModel:
         
         if '~' in formula:
             matrices = dmatrices(formula,data)
+            # 保存训练模型时数据的design_info，用于转换新数据
+            self._matrices_design_info = matrices[1].design_info
             y = np.asarray(matrices[0]).flatten()
             x = matrix_to_df(matrices[1])
             return x,y
         else:
-            matrix = dmatrix(formula,data)
-            x = matrix_to_df(matrix) 
+            matrix = build_design_matrices([self._matrices_design_info], data)[0]
+            x      = matrix_to_df(matrix)
             return x
     
     def fit(self,method='OLS',method_kwargs:dict=None,bootstrap=True):
@@ -251,7 +253,6 @@ class LinearModel:
         
         elif new_data is not None and data_grid is None:
             data = self.__init_data(new_data)
-        
         
         formula_x = re.findall('~(.+)',self.formula)[0]
         new_x     = self.__model_dataframe(data,formula=formula_x)
