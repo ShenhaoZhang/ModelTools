@@ -45,6 +45,7 @@ class LinearModel:
     
     def __init_data(self,data) -> pd.DataFrame:
         if isinstance(data,pd.DataFrame):
+            data = data.reset_index(drop=True)
             return data
         if isinstance(data,dict):
             return pd.DataFrame(data)
@@ -145,6 +146,7 @@ class LinearModel:
         return self
     
     def bootstrap_pred(self,new_x=None,n_resample=None) -> np.ndarray:
+        # pred_dist 行数:len(new_x) 列数:n_resample
         if self.coef_dist_boot is None:
             self.bootstrap_coef()
         if new_x is None:
@@ -238,7 +240,14 @@ class LinearModel:
     def plot_coef_pair(self):
         ...
     
-    def predict(self, new_data:pd.DataFrame=None, data_grid:dict=None, alpha=0.05, ci_method='bootstrap') -> pd.DataFrame:
+    def predict(
+        self, 
+        new_data :pd.DataFrame = None,
+        data_grid:dict         = None,
+        alpha    :float        = 0.05,
+        ci_method:str          = 'bootstrap'
+    ) -> pd.DataFrame:
+        
         self.__check_fitted()
         
         if new_data is not None and data_grid is not None:
@@ -274,7 +283,7 @@ class LinearModel:
         
         return predictions
     
-    def __predict_interval(self,new_x,method='conformal',alpha=0.05) -> pd.DataFrame:
+    def __predict_interval(self,new_x,method,alpha) -> pd.DataFrame:
         if method == 'conformal':
             from mapie.regression import MapieRegressor
             pred_interval = MapieRegressor(self.mod).fit(self.x,self.y).predict(new_x,alpha=alpha)[1]
@@ -303,11 +312,15 @@ class LinearModel:
         
         return interval
     
-    def plot_prediction(self,ci_type:Union[str,list]='mean',**predict_kwargs):
+    def plot_prediction(
+        self,
+        data_grid:dict,
+        ci_type  :Union[str,list] = 'mean',
+        **predict_kwargs
+    ):
         from .plot.prediction import plot_prediction
         
-        if 'data_grid' not in predict_kwargs:
-            raise Exception('WRONG')
+        predict_kwargs.update({'data_grid':data_grid})
         
         prediction = self.predict(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
@@ -319,7 +332,15 @@ class LinearModel:
         )
 
         return plot
-        
+    
+    def comparisons(
+        self,
+        var:dict,
+        ci_type:str
+    ):
+        #TODO 用pred_dist分别预测两组输入，比较两组输入的预测值是否有差异
+        #TODO 在上面的基础上，用另一个变量分组，比较两组间的差异和差异间是否有差异
+        ...
     
     def summary(self):
         coef_info   = self.get_coef()
@@ -335,6 +356,7 @@ class LinearModel:
     def __check_fitted(self):
         if self.mod is None:
             raise Exception('Need fit first')
+
 
 def get_p_value(sample:np.ndarray, hypothesis:float, alternative='two_side') -> float:
     sample    = sample.flatten()
