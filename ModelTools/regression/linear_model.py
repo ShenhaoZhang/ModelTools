@@ -34,16 +34,18 @@ class LinearModel:
     def __init__(
         self,
         formula:str,
-        data:Union[dict,pd.DataFrame]
+        data:Union[dict,pd.DataFrame],
+        rng_seed=0
     ) -> None:
         self.formula   = formula
         self.y_col     = re.findall('(.+)~',self.formula)[0]
-        self.data      = self.__init_data(data) 
-        self.x,self.y  = self.__model_dataframe(data=self.data,formula=self.formula)
+        self.data      = self._init_data(data) 
+        self.x,self.y  = self._model_dataframe(data=self.data,formula=self.formula)
         self.mod       = None
         self.coef_dist_boot = None
-    
-    def __init_data(self,data) -> pd.DataFrame:
+        self.rng_seed = rng_seed
+        
+    def _init_data(self,data) -> pd.DataFrame:
         if isinstance(data,pd.DataFrame):
             data = data.reset_index(drop=True)
             return data
@@ -52,7 +54,7 @@ class LinearModel:
         if isinstance(data,(list,tuple)):
             return pd.DataFrame(data)
     
-    def __model_dataframe(self,data,formula) -> Union[tuple,pd.DataFrame]:
+    def _model_dataframe(self,data,formula) -> Union[tuple,pd.DataFrame]:
         
         def matrix_to_df(matrix):
             return pd.DataFrame(data=np.asarray(matrix),columns=matrix.design_info.column_names)
@@ -101,10 +103,11 @@ class LinearModel:
         return self
 
     def plot_check(self,ppc_n_resample=50):
+        rng = np.random.default_rng(self.rng_seed)
         from .plot.check_model import plot_check_model
         pred = self.predict(ci_method=None).loc[:,'mean'].to_numpy()
         boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
-        boot_pred += np.random.choice(self.train_resid,size=boot_pred.shape,replace=True)
+        boot_pred += rng.choice(self.train_resid,size=boot_pred.shape,replace=True)
         # boot_pred += np.random.normal(loc=0,scale=self.train_resid.std(),size=boot_pred.shape)
         plot = plot_check_model(
             residual     = self.train_resid,
@@ -115,7 +118,7 @@ class LinearModel:
         return plot
 
     def bootstrap_coef(self,n_resamples=1000,re_boot=False):
-        self.__check_fitted()
+        self._check_fitted()
         
         mod            = clone(self.mod)
         bootstrap_x    = self.x.to_numpy()
@@ -172,7 +175,7 @@ class LinearModel:
         return pred_dist
     
     def get_coef(self, hypothesis:float=0, alternative='two_side', CI_level=0.95) -> pd.DataFrame:
-        self.__check_fitted()
+        self._check_fitted()
         
         coef_name  = self.x.columns
         coef_value = self.mod.coef_.flatten()
@@ -248,7 +251,7 @@ class LinearModel:
         ci_method:str          = 'bootstrap'
     ) -> pd.DataFrame:
         
-        self.__check_fitted()
+        self._check_fitted()
         
         if new_data is not None and data_grid is not None:
             raise Exception('WRONG')
@@ -261,16 +264,16 @@ class LinearModel:
             data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
         
         elif new_data is not None and data_grid is None:
-            data = self.__init_data(new_data)
+            data = self._init_data(new_data)
         
         formula_x = re.findall('~(.+)',self.formula)[0]
-        new_x     = self.__model_dataframe(data,formula=formula_x)
+        new_x     = self._model_dataframe(data,formula=formula_x)
         
         # 点预测
         pred = self.mod.predict(new_x).flatten()
         # 区间预测
         if ci_method is not None:
-            interval = self.__predict_interval(new_x,alpha=alpha,method=ci_method)
+            interval = self._predict_interval(new_x,alpha=alpha,method=ci_method)
         else:
             interval = None
         
@@ -283,7 +286,7 @@ class LinearModel:
         
         return predictions
     
-    def __predict_interval(self,new_x,method,alpha) -> pd.DataFrame:
+    def _predict_interval(self,new_x,method,alpha) -> pd.DataFrame:
         if method == 'conformal':
             from mapie.regression import MapieRegressor
             pred_interval = MapieRegressor(self.mod).fit(self.x,self.y).predict(new_x,alpha=alpha)[1]
@@ -324,7 +327,7 @@ class LinearModel:
         
         prediction = self.predict(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
-        
+        #TODO 增加显著性水平
         plot       = plot_prediction(
             data     = prediction,
             plot_var = plot_var,
@@ -333,14 +336,43 @@ class LinearModel:
 
         return plot
     
-    def comparisons(
+    def compare_prediction(
         self,
-        var:dict,
-        ci_type:str
+        data_grid:dict,
+        hypothesis=0,
+        alternative='two_side',
     ):
+        #TODO 增加显著性水平
         #TODO 用pred_dist分别预测两组输入，比较两组输入的预测值是否有差异
         #TODO 在上面的基础上，用另一个变量分组，比较两组间的差异和差异间是否有差异
-        ...
+        from ..utils.data_grid import DataGrid
+        data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
+        formula_x = re.findall('~(.+)',self.formula)[0]
+        x         = self._model_dataframe(data,formula=formula_x)
+        
+        if x.shape[0] != 2:
+            raise Exception('WRONG')
+        
+        #TODO pred是否要shuffle
+        pred          = self.bootstrap_pred(new_x=x)
+        diff          = (pred[1,:] - pred[0,:]).mean()
+        diff_mean_std = (pred[1,:] - pred[0,:]).std()
+        diff_mean_p   = get_p_value(diff,hypothesis=hypothesis,alternative=alternative)
+        
+        rng = np.random.default_rng(seed=self.rng_seed)
+        pred_obs     = pred + rng.choice(self.train_resid,size=pred.shape,replace=True)
+        diff_obs     = pred_obs[1,:] - pred_obs[0,:]
+        diff_obs_std = pred_obs.std()
+        diff_obs_p   = get_p_value(diff_obs,hypothesis=hypothesis,alternative=alternative)
+        
+        comparison = pd.DataFrame({
+            'diff'             : [diff],
+            'diff_mean_std'    : [diff_mean_std],
+            'diff_mean_p_value': [diff_mean_p],
+            'diff_obs_std'     : [diff_obs_std],
+            'diff_obs_p_value' : [diff_obs_p],
+        })
+        return comparison
     
     def summary(self):
         coef_info   = self.get_coef()
@@ -353,7 +385,7 @@ class LinearModel:
             tabulate(metric_info,headers='keys')
         )
     
-    def __check_fitted(self):
+    def _check_fitted(self):
         if self.mod is None:
             raise Exception('Need fit first')
 

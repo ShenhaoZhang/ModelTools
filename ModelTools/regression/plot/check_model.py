@@ -22,6 +22,7 @@ def plot_check_model(
     fig.tight_layout(h_pad=5,w_pad=2)
     fontdict = {'fontsize':10}
     
+    #TODO lowess拟合部分数据
     smooth = lowess(residual,fitted_value)
     ax[0,0].scatter(x=fitted_value,y=residual,s=10,c='#1b6ca8')
     ax[0,0].plot(smooth[:,0],smooth[:,1],color='green')
@@ -33,6 +34,7 @@ def plot_check_model(
     ax[0,1].set_title('Homogeneity of Variance \nReference line should be flat and horizontal',loc='left',fontdict=fontdict)
     ax[0,1].set_xlabel('Fitted values')
     ax[0,1].set_ylabel('abs(std_residuals)')
+    #TODO lowess拟合部分数据
     smooth = lowess(abs_std_residual,fitted_value)
     ax[0,1].scatter(x=fitted_value,y=abs_std_residual,s=10,c='#1b6ca8')
     ax[0,1].plot(smooth[:,0],smooth[:,1],color='green')
