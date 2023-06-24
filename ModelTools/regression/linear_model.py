@@ -103,9 +103,9 @@ class LinearModel:
         return self
 
     def plot_check(self,ppc_n_resample=50):
-        rng = np.random.default_rng(self.rng_seed)
         from .plot.check_model import plot_check_model
-        pred = self.predict(ci_method=None).loc[:,'mean'].to_numpy()
+        rng       = np.random.default_rng(self.rng_seed)
+        pred      = self.predict(ci_method=None).loc[:,'mean'].to_numpy()
         boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
         boot_pred += rng.choice(self.train_resid,size=boot_pred.shape,replace=True)
         # boot_pred += np.random.normal(loc=0,scale=self.train_resid.std(),size=boot_pred.shape)
@@ -174,7 +174,7 @@ class LinearModel:
         
         return pred_dist
     
-    def get_coef(self, hypothesis:float=0, alternative='two_side', CI_level=0.95) -> pd.DataFrame:
+    def get_coef(self, hypothesis:float=0, alternative='two_side', ci_level=0.95) -> pd.DataFrame:
         self._check_fitted()
         
         coef_name  = self.x.columns
@@ -183,8 +183,8 @@ class LinearModel:
         
         # 用bootstrap方法对参数进行统计推断
         if self.coef_dist_boot is not None:
-            low_level = (1 - CI_level) / 2
-            up_level  = CI_level + (1 - CI_level) / 2
+            low_level = (1 - ci_level) / 2
+            up_level  = ci_level + (1 - ci_level) / 2
             ci_lower  = np.quantile(self.coef_dist_boot,low_level,axis=0)
             ci_upper  = np.quantile(self.coef_dist_boot,up_level,axis=0)
             std_error = np.std(self.coef_dist_boot,axis=0)
@@ -214,7 +214,7 @@ class LinearModel:
             
         return coef
     
-    def get_metric(self,bootstrap=True,summary=True,CI_level=0.95) -> pd.DataFrame:
+    def get_metric(self, bootstrap=True, summary=True, ci_level=0.95) -> pd.DataFrame:
         from .metric import Metric
         
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
@@ -222,8 +222,8 @@ class LinearModel:
             bootstrap_pred = list(self.bootstrap_pred(self.x).T)
             metric_boot    = Metric(self.y,bootstrap_pred).get_metric()
             if summary == True:
-                lower_level  = (1 - CI_level) / 2
-                upper_level  = CI_level + (1 - CI_level) / 2
+                lower_level  = (1 - ci_level) / 2
+                upper_level  = ci_level + (1 - ci_level) / 2
                 metric_std   = metric_boot.std(axis=0,ddof=1).to_frame().T
                 metric_ci    = metric_boot.quantile([lower_level,upper_level],axis=0)
                 metric       = pd.concat([metric,metric_std,metric_ci],axis=0)
@@ -245,10 +245,10 @@ class LinearModel:
     
     def predict(
         self, 
-        new_data :pd.DataFrame = None,
-        data_grid:dict         = None,
-        alpha    :float        = 0.05,
-        ci_method:str          = 'bootstrap'
+        new_data  :pd.DataFrame = None,
+        data_grid:dict          = None,
+        ci_level  :float        = 0.95,
+        ci_method:str           = 'bootstrap'
     ) -> pd.DataFrame:
         
         self._check_fitted()
@@ -273,7 +273,7 @@ class LinearModel:
         pred = self.mod.predict(new_x).flatten()
         # 区间预测
         if ci_method is not None:
-            interval = self._predict_interval(new_x,alpha=alpha,method=ci_method)
+            interval = self._predict_interval(new_x,ci_level=ci_level,method=ci_method)
         else:
             interval = None
         
@@ -286,7 +286,8 @@ class LinearModel:
         
         return predictions
     
-    def _predict_interval(self,new_x,method,alpha) -> pd.DataFrame:
+    def _predict_interval(self,new_x,method,ci_level) -> pd.DataFrame:
+        alpha = 1-ci_level
         if method == 'conformal':
             from mapie.regression import MapieRegressor
             pred_interval = MapieRegressor(self.mod).fit(self.x,self.y).predict(new_x,alpha=alpha)[1]
@@ -339,39 +340,63 @@ class LinearModel:
     def compare_prediction(
         self,
         data_grid:dict,
-        hypothesis=0,
-        alternative='two_side',
+        ci_level    = 0.95,
+        hypothesis  = 0,
+        alternative = 'two_side',
     ):
-        #TODO 增加显著性水平
-        #TODO 用pred_dist分别预测两组输入，比较两组输入的预测值是否有差异
-        #TODO 在上面的基础上，用另一个变量分组，比较两组间的差异和差异间是否有差异
         from ..utils.data_grid import DataGrid
         data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
         formula_x = re.findall('~(.+)',self.formula)[0]
         x         = self._model_dataframe(data,formula=formula_x)
+        alpha     = 1 - ci_level
         
-        if x.shape[0] != 2:
-            raise Exception('WRONG')
+        def shift_diff(x):
+            shift = np.roll(x,shift=1,axis=0)
+            diff  = (x - shift)[1:,:]
+            return diff
+        def contrast_data(data):
+            raw_data   = data.iloc[:-1,:].round(2).astype('str')
+            shift_data = data.shift(-1).iloc[:-1,:].convert_dtypes().round(2).astype('str')
+            result     = raw_data + '->' + shift_data
+            change_col = result.nunique().loc[lambda sr:sr>1].index
+            result     = result.loc[:,change_col]
+            return result
         
-        #TODO pred是否要shuffle
-        pred          = self.bootstrap_pred(new_x=x)
-        diff          = (pred[1,:] - pred[0,:]).mean()
-        diff_mean_std = (pred[1,:] - pred[0,:]).std()
-        diff_mean_p   = get_p_value(diff,hypothesis=hypothesis,alternative=alternative)
+        # 均值的预测值对比
+        pred            = self.bootstrap_pred(new_x=x)
+        shift_diff_pred = shift_diff(pred)
+        diff            = shift_diff_pred.mean(axis=1)
+        diff_mean_std   = shift_diff_pred.std(axis=1)
+        diff_mean_p     = []
+        for i in range(shift_diff_pred.shape[0]):
+            p_value = get_p_value(shift_diff_pred[i,:],hypothesis=hypothesis,alternative=alternative)
+            diff_mean_p.append(p_value)
+        diff_mean_lower ,diff_mean_upper  = np.quantile(shift_diff_pred,[alpha/2,1-alpha/2],axis=1)
         
-        rng = np.random.default_rng(seed=self.rng_seed)
-        pred_obs     = pred + rng.choice(self.train_resid,size=pred.shape,replace=True)
-        diff_obs     = pred_obs[1,:] - pred_obs[0,:]
-        diff_obs_std = pred_obs.std()
-        diff_obs_p   = get_p_value(diff_obs,hypothesis=hypothesis,alternative=alternative)
+        # 单个观测的预测值对比
+        rng                 = np.random.default_rng(seed=self.rng_seed)
+        pred_obs            = pred + rng.choice(self.train_resid,size=pred.shape,replace=True)
+        shift_diff_pred_obs = shift_diff(pred_obs)
+        diff_obs_std        = shift_diff_pred_obs.std(axis=1)
+        diff_obs_p          = []
+        for i in range(shift_diff_pred_obs.shape[0]):
+            p_value = get_p_value(shift_diff_pred_obs[i,:],hypothesis=hypothesis,alternative=alternative)
+            diff_obs_p.append(p_value)
+        diff_obs_lower ,diff_obs_upper  = np.quantile(shift_diff_pred_obs,[alpha/2,1-alpha/2],axis=1)
         
+        #TODO dataframe 每一行标记变量如何变化
         comparison = pd.DataFrame({
-            'diff'             : [diff],
-            'diff_mean_std'    : [diff_mean_std],
-            'diff_mean_p_value': [diff_mean_p],
-            'diff_obs_std'     : [diff_obs_std],
-            'diff_obs_p_value' : [diff_obs_p],
+            'diff'        : diff,
+            'mean_std'    : diff_mean_std,
+            'mean_p_value': diff_mean_p,
+            'mean_lower'  : diff_mean_lower,
+            'mean_upper'  : diff_mean_upper,
+            'obs_std'     : diff_obs_std,
+            'obs_p_value' : diff_obs_p,
+            'obs_lower'   : diff_obs_lower,
+            'obs_upper'   : diff_obs_upper
         })
+        comparison = pd.concat([contrast_data(data),comparison],axis=1)
         return comparison
     
     def summary(self):
