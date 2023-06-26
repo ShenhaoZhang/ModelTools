@@ -405,6 +405,49 @@ class LinearModel:
         comparison = pd.concat([contrast_data(data),comparison],axis=1)
         return comparison
     
+    def slope(
+        self,
+        data_grid:dict,
+        var:list=None,
+        ci_level    = 0.95,
+        hypothesis  = 0,
+        alternative = 'two_side',
+        eps         = 1e-4
+    ):
+        from ..utils.data_grid import DataGrid
+        formula_x = re.findall('~(.+)',self.formula)[0]
+        #TODO 去除data中的无用变量
+        data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
+        x         = self._model_dataframe(data,formula=formula_x)
+        alpha     = 1 - ci_level
+        pred = self.bootstrap_pred(x)
+        
+        result_data = []
+        slope_var = data_grid.keys() if var is None else var
+        for var_name in slope_var:
+            data_eps = data.copy(deep=True)
+            data_eps[var_name] += eps 
+            x_eps = self._model_dataframe(data_eps,formula=formula_x)
+            pred_eps = self.bootstrap_pred(x_eps)
+            pred_slope = (pred_eps-pred)/eps
+            slope_result = pd.DataFrame(
+                {
+                    'term':var_name,
+                    'mean':pred_slope.mean(axis=1), #TODO mean不从boot中计算得到，而是用所有数据计算得到
+                    'std':pred_slope.std(axis=1)
+                }
+            )
+            slope_result = pd.concat([slope_result,data],axis=1)
+            result_data.append(slope_result)
+        result_data = pd.concat(result_data,axis=0)
+        return result_data
+    
+    def plot_slope(self):
+        ...
+    
+    def compare_slope(self):
+        ...
+    
     def summary(self):
         coef_info   = self.get_coef()
         metric_info = self.get_metric()
