@@ -72,7 +72,7 @@ class LinearModel:
             x      = matrix_to_df(matrix)
             return x
     
-    def fit(self,method='OLS',method_kwargs:dict=None,bootstrap=True):
+    def fit(self,method='OLS',method_kwargs:dict=None,n_bootstrap=1000):
         
         # 模型默认参数
         mod_default_param = self.default_param.get(method,{})
@@ -96,8 +96,8 @@ class LinearModel:
             self.mod = mod.fit(X=self.x, y=self.y)
         self.train_resid = self.y - self.mod.predict(self.x)
         
-        if bootstrap == True:
-            self.bootstrap_coef(n_resamples=1000,re_boot=True)
+        if n_bootstrap > 0:
+            self.bootstrap_coef(n_resamples=n_bootstrap,re_boot=True)
         else:
             self.coef_dist_boot = None
         
@@ -109,7 +109,6 @@ class LinearModel:
         pred      = self.predict(new_data=self.data)
         boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
         boot_pred += rng.choice(self.train_resid,size=boot_pred.shape,replace=True)
-        # boot_pred += np.random.normal(loc=0,scale=self.train_resid.std(),size=boot_pred.shape)
         plot = plot_check_model(
             residual     = self.train_resid,
             fitted_value = pred,
