@@ -358,7 +358,13 @@ class LinearModel:
             raw_data   = data.iloc[:-1,:].round(2).astype('str')
             shift_data = data.shift(-1).iloc[:-1,:].convert_dtypes().round(2).astype('str')
             result     = raw_data + '->' + shift_data
-            change_col = result.nunique().loc[lambda sr:sr>1].index
+            change_col = []
+            for col in result.columns:
+                if col not in self.formula:
+                    continue
+                if (raw_data.loc[:,col] == shift_data.loc[:,col]).all():
+                    continue
+                change_col.append(col)
             result     = result.loc[:,change_col]
             return result
         
