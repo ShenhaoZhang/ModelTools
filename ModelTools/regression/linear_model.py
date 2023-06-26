@@ -1,3 +1,4 @@
+#TODO 统一n resamples的名称
 import re
 from typing import Union
 
@@ -37,21 +38,25 @@ class LinearModel:
         data:Union[dict,pd.DataFrame],
         rng_seed=0
     ) -> None:
+        
         self.formula   = formula
         self.formula_x = re.findall('~(.+)',self.formula)[0]
         self.y_col     = re.findall('(.+)~',self.formula)[0]
         self.data      = self._init_data(data) 
         self.x,self.y  = self._model_dataframe(data=self.data,formula=self.formula)
         self.mod       = None
-        self.coef_dist_boot = None
-        self.rng_seed = rng_seed
+        self.coef_dist = None
+        self.rng_seed  = rng_seed
         
     def _init_data(self,data) -> pd.DataFrame:
+        
         if isinstance(data,pd.DataFrame):
             data = data.reset_index(drop=True)
             return data
+        
         if isinstance(data,dict):
             return pd.DataFrame(data)
+        
         if isinstance(data,(list,tuple)):
             return pd.DataFrame(data)
     
@@ -97,25 +102,11 @@ class LinearModel:
         self.train_resid = self.y - self.mod.predict(self.x)
         
         if n_bootstrap > 0:
-            self.bootstrap_coef(n_resamples=n_bootstrap,re_boot=True)
+            self.coef_dist = self.bootstrap_coef(n_resamples=n_bootstrap,re_boot=True)
         else:
-            self.coef_dist_boot = None
+            self.coef_dist = None
         
         return self
-
-    def plot_check(self,ppc_n_resample=50):
-        from .plot.check_model import plot_check_model
-        rng       = np.random.default_rng(self.rng_seed)
-        pred      = self.predict(new_data=self.data)
-        boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
-        boot_pred += rng.choice(self.train_resid,size=boot_pred.shape,replace=True)
-        plot = plot_check_model(
-            residual     = self.train_resid,
-            fitted_value = pred,
-            boot_pred    = boot_pred,
-            y_name       = self.y_col
-        )
-        return plot
 
     def bootstrap_coef(self,n_resamples=1000,re_boot=False):
         self._check_fitted()
@@ -131,7 +122,7 @@ class LinearModel:
             mod.fit(x,y)
             return mod.coef_
         
-        self.coef_dist_boot = bootstrap(
+        coef_dist = bootstrap(
             data             = bootstrap_data,
             statistic        = get_boot_coef,
             n_resamples      = n_resamples,
@@ -142,23 +133,21 @@ class LinearModel:
             method           = 'percentile'
         ).bootstrap_distribution.T
         
-        self.coef_dist_boot = pd.DataFrame(
-            data    = self.coef_dist_boot,
-            columns = self.x.columns
-        )
-        return self
+        coef_dist = pd.DataFrame(data = coef_dist,columns = self.x.columns)
+        
+        return coef_dist
     
     def bootstrap_pred(self,new_x=None,n_resample=None) -> np.ndarray:
         # pred_dist 行数:len(new_x) 列数:n_resample
-        if self.coef_dist_boot is None:
-            self.bootstrap_coef()
+        if self.coef_dist is None:
+            self.coef_dist = self.bootstrap_coef()
         if new_x is None:
             new_x = self.x
             
         mod = clone(self.mod).fit(self.x,self.y)
         pred_dist = []
         
-        coef_dist_boot  = self.coef_dist_boot.to_numpy()
+        coef_dist_boot  = self.coef_dist.to_numpy()
         n_coef_resample = coef_dist_boot.shape[0]
         if (n_resample is not None) and (n_coef_resample >= n_resample):
             coef_dist_boot = coef_dist_boot[0:n_resample,:]
@@ -182,18 +171,18 @@ class LinearModel:
         coef       = pd.DataFrame(data={'estimate':coef_value},index=coef_name)
         
         # 用bootstrap方法对参数进行统计推断
-        if self.coef_dist_boot is not None:
+        if self.coef_dist is not None:
             low_level = (1 - ci_level) / 2
             up_level  = ci_level + (1 - ci_level) / 2
-            ci_lower  = np.quantile(self.coef_dist_boot,low_level,axis=0)
-            ci_upper  = np.quantile(self.coef_dist_boot,up_level,axis=0)
-            std_error = np.std(self.coef_dist_boot,axis=0)
+            ci_lower  = np.quantile(self.coef_dist,low_level,axis=0)
+            ci_upper  = np.quantile(self.coef_dist,up_level,axis=0)
+            std_error = np.std(self.coef_dist,axis=0)
             z_score   = (coef.estimate - hypothesis) / std_error
             
             p_value = []
             for name in coef_name:
                 value = get_p_value(
-                    self.coef_dist_boot.loc[:,name].to_numpy(),
+                    self.coef_dist.loc[:,name].to_numpy(),
                     hypothesis  = hypothesis,
                     alternative = alternative,
                 )
@@ -218,7 +207,7 @@ class LinearModel:
         from .metric import Metric
         
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
-        if (bootstrap == True) and (self.bootstrap_coef is not None):
+        if (bootstrap == True) and (self.coef_dist is not None):
             bootstrap_pred = list(self.bootstrap_pred(self.x).T)
             metric_boot    = Metric(self.y,bootstrap_pred).get_metric()
             if summary == True:
@@ -235,7 +224,7 @@ class LinearModel:
     def plot_coef_dist(self,**plot_kwargs):
         from .plot.distribution import plot_distribution
         plot = plot_distribution(
-            data = self.coef_dist_boot,
+            data = self.coef_dist,
             **plot_kwargs
         )
         return plot
@@ -340,7 +329,6 @@ class LinearModel:
         
         prediction = self.predict_frame(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
-        #TODO 增加显著性水平
         plot       = plot_prediction(
             data     = prediction,
             plot_var = plot_var,
@@ -477,6 +465,20 @@ class LinearModel:
         print(
             tabulate(metric_info,headers='keys')
         )
+    
+    def plot_check(self,ppc_n_resample=50):
+        from .plot.check_model import plot_check_model
+        rng       = np.random.default_rng(self.rng_seed)
+        pred      = self.predict(new_data=self.data)
+        boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
+        boot_pred += rng.choice(self.train_resid,size=boot_pred.shape,replace=True)
+        plot = plot_check_model(
+            residual     = self.train_resid,
+            fitted_value = pred,
+            boot_pred    = boot_pred,
+            y_name       = self.y_col
+        )
+        return plot
     
     def _check_fitted(self):
         if self.mod is None:
