@@ -38,6 +38,7 @@ class LinearModel:
         rng_seed=0
     ) -> None:
         self.formula   = formula
+        self.formula_x = re.findall('~(.+)',self.formula)[0]
         self.y_col     = re.findall('(.+)~',self.formula)[0]
         self.data      = self._init_data(data) 
         self.x,self.y  = self._model_dataframe(data=self.data,formula=self.formula)
@@ -105,7 +106,7 @@ class LinearModel:
     def plot_check(self,ppc_n_resample=50):
         from .plot.check_model import plot_check_model
         rng       = np.random.default_rng(self.rng_seed)
-        pred      = self.predict(ci_method=None).loc[:,'mean'].to_numpy()
+        pred      = self.predict(new_data=self.data)
         boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
         boot_pred += rng.choice(self.train_resid,size=boot_pred.shape,replace=True)
         # boot_pred += np.random.normal(loc=0,scale=self.train_resid.std(),size=boot_pred.shape)
@@ -244,6 +245,19 @@ class LinearModel:
         ...
     
     def predict(
+        self,
+        new_data=None,
+        new_x=None,
+    ) -> np.ndarray:
+        self._check_fitted()
+        
+        if new_data is not None:
+            new_x     = self._model_dataframe(new_data,formula=self.formula_x)
+        pred = self.mod.predict(new_x).flatten()
+        
+        return pred
+    
+    def predict_frame(
         self, 
         new_data  :pd.DataFrame = None,
         data_grid:dict          = None,
@@ -266,8 +280,7 @@ class LinearModel:
         elif new_data is not None and data_grid is None:
             data = self._init_data(new_data)
         
-        formula_x = re.findall('~(.+)',self.formula)[0]
-        new_x     = self._model_dataframe(data,formula=formula_x)
+        new_x     = self._model_dataframe(data,formula=self.formula_x)
         
         # 点预测
         pred = self.mod.predict(new_x).flatten()
@@ -326,7 +339,7 @@ class LinearModel:
         
         predict_kwargs.update({'data_grid':data_grid})
         
-        prediction = self.predict(**predict_kwargs)
+        prediction = self.predict_frame(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
         #TODO 增加显著性水平
         plot       = plot_prediction(
@@ -345,9 +358,8 @@ class LinearModel:
         alternative = 'two_side',
     ):
         from ..utils.data_grid import DataGrid
-        data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
-        formula_x = re.findall('~(.+)',self.formula)[0]
-        x         = self._model_dataframe(data,formula=formula_x)
+        data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid) # TODO 检查datagrid的合规性
+        x         = self._model_dataframe(data,formula=self.formula_x)
         alpha     = 1 - ci_level
         
         def shift_diff(x):
@@ -390,7 +402,6 @@ class LinearModel:
             diff_obs_p.append(p_value)
         diff_obs_lower ,diff_obs_upper  = np.quantile(shift_diff_pred_obs,[alpha/2,1-alpha/2],axis=1)
         
-        #TODO dataframe 每一行标记变量如何变化
         comparison = pd.DataFrame({
             'diff'        : diff,
             'mean_std'    : diff_mean_std,
@@ -414,31 +425,40 @@ class LinearModel:
         alternative = 'two_side',
         eps         = 1e-4
     ):
+
         from ..utils.data_grid import DataGrid
-        formula_x = re.findall('~(.+)',self.formula)[0]
-        #TODO 去除data中的无用变量
+        # TODO 检查datagrid的合规性
         data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
-        x         = self._model_dataframe(data,formula=formula_x)
+        x         = self._model_dataframe(data,formula=self.formula_x)
         alpha     = 1 - ci_level
         pred = self.bootstrap_pred(x)
         
-        result_data = []
         slope_var = data_grid.keys() if var is None else var
+        result_data = []
         for var_name in slope_var:
-            data_eps = data.copy(deep=True)
-            data_eps[var_name] += eps 
-            x_eps = self._model_dataframe(data_eps,formula=formula_x)
-            pred_eps = self.bootstrap_pred(x_eps)
-            pred_slope = (pred_eps-pred)/eps
+            
+            # 计算slope的分布
+            data_eps            = data.copy(deep=True)
+            data_eps[var_name] += eps
+            x_eps               = self._model_dataframe(data_eps,formula=self.formula_x)
+            pred_eps            = self.bootstrap_pred(x_eps)
+            slope_dist          = (pred_eps-pred)/eps
+            
+            # 基于完整数据计算的slope
+            pred_slope_mean = (self.predict(new_x=x_eps) - self.predict(new_x=x)) / eps
+            
+            # 聚合结果 
+            # TODO 增加统计推断
             slope_result = pd.DataFrame(
                 {
-                    'term':var_name,
-                    'mean':pred_slope.mean(axis=1), #TODO mean不从boot中计算得到，而是用所有数据计算得到
-                    'std':pred_slope.std(axis=1)
+                    'term': var_name,
+                    'mean': pred_slope_mean,
+                    'std' : slope_dist.std(axis=1)
                 }
             )
             slope_result = pd.concat([slope_result,data],axis=1)
             result_data.append(slope_result)
+        
         result_data = pd.concat(result_data,axis=0)
         return result_data
     
@@ -496,7 +516,7 @@ if __name__ == '__main__':
     # m.summary()
     
     print('coef',m.get_coef())
-    print(m.predict(ci_method='bootstrap'))
+    print(m.predict_frame(ci_method='bootstrap'))
     
     # pred = m.predict()
     # print(pred)
