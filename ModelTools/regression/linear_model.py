@@ -3,7 +3,6 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from scipy.stats import bootstrap
 from sklearn.base import clone
 from sklearn.model_selection import GridSearchCV
 from patsy import dmatrices,build_design_matrices
@@ -101,55 +100,39 @@ class LinearModel:
     def bootstrap_coef(self,n_bootstrap=1000,re_boot=False):
         self._check_fitted()
         
-        mod            = clone(self.mod)
-        bootstrap_x    = self.x.to_numpy()
-        bootstrap_data = [bootstrap_x[:,i] for i in range(bootstrap_x.shape[1])]
-        bootstrap_data.append(self.y)
+        rng       = np.random.default_rng(seed=self.rng_seed)
+        all_index = np.arange(self.x.shape[0])
+        data_size = len(all_index)
+        x         = self.x.to_numpy()
+        mod       = clone(self.mod)
         
-        def get_boot_coef(*args):
-            x = np.column_stack(args[:-1])
-            y = args[-1]
-            mod.fit(x,y)
-            return mod.coef_
-        
-        coef_dist = bootstrap(
-            data             = bootstrap_data,
-            statistic        = get_boot_coef,
-            n_resamples      = n_bootstrap,
-            confidence_level = 0.5,
-            paired           = True,
-            random_state     = 0,
-            vectorized       = False,
-            method           = 'percentile'
-        ).bootstrap_distribution.T
-        
+        coef_dist = []
+        for i in range(n_bootstrap):
+            sample_index = rng.choice(all_index,size=data_size,replace=True)
+            sample_x     = x[sample_index,:]
+            sample_y     = self.y[sample_index]
+            mod.fit(sample_x,sample_y)
+            coef_dist.append(mod.coef_)
+            
         coef_dist = pd.DataFrame(data = coef_dist,columns = self.x.columns)
         
         return coef_dist
-    
-    def bootstrap_pred(self,new_x=None,n_resample=None) -> np.ndarray:
-        # pred_dist 行数:len(new_x) 列数:n_resample
-        if self.coef_dist is None:
-            self.coef_dist = self.bootstrap_coef()
-        if new_x is None:
-            new_x = self.x
-            
-        mod = clone(self.mod).fit(self.x,self.y)
-        pred_dist = []
+
+    def bootstrap_pred(self,new_x=None,n_bootstrap=None) -> np.ndarray:
+        new_x = self.x if new_x is None else new_x
         
-        coef_dist_boot  = self.coef_dist.to_numpy()
-        n_coef_resample = coef_dist_boot.shape[0]
-        if (n_resample is not None) and (n_coef_resample >= n_resample):
-            coef_dist_boot = coef_dist_boot[0:n_resample,:]
-        else:
-            ...
-            #TODO 
-            
-        for coef in coef_dist_boot:
+        coef_dist       = self.coef_dist.to_numpy()
+        n_coef_resample = coef_dist.shape[0]
+        if (n_bootstrap is not None) and (n_coef_resample >= n_bootstrap):
+            coef_dist = coef_dist[0:n_bootstrap,:]
+        #TODO
+        mod = clone(self.mod).fit(self.x.iloc[0:10,:],self.y[0:10])
+        pred_dist = []    
+        for coef in coef_dist:
             mod.coef_ = coef
             pred = mod.predict(new_x)
             pred_dist.append(pred)
-        pred_dist = np.column_stack(pred_dist)
+        pred_dist = np.row_stack(pred_dist)
         
         return pred_dist
     
@@ -197,7 +180,7 @@ class LinearModel:
         
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
         if (bootstrap == True) and (self.coef_dist is not None):
-            bootstrap_pred = list(self.bootstrap_pred(self.x).T)
+            bootstrap_pred = list(self.bootstrap_pred(self.x))
             metric_boot    = Metric(self.y,bootstrap_pred).get_metric()
             if summary == True:
                 lower_level  = (1 - ci_level) / 2
@@ -233,7 +216,7 @@ class LinearModel:
     def plot_check(self,ppc_n_resample=50):
         rng       = np.random.default_rng(self.rng_seed)
         pred      = self._predict(new_data=self.data)
-        boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
+        boot_pred = self.bootstrap_pred(n_bootstrap=ppc_n_resample)
         boot_pred += rng.choice(self.fit_resid,size=boot_pred.shape,replace=True)
         plot = plot_check_model(
             residual     = self.fit_resid,
@@ -279,7 +262,7 @@ class LinearModel:
                 {
                     'term': var_name,
                     'mean': pred_slope_mean,
-                    'std' : slope_dist.std(axis=1)
+                    'std' : slope_dist.std(axis=0)
                 }
             )
             slope_result = pd.concat([slope_result,data],axis=1)
@@ -359,8 +342,8 @@ class LinearModel:
         
         elif method == 'bootstrap':
             pred_dist = self.bootstrap_pred(new_x)
-            mean_se   = np.std(pred_dist,axis=1)
-            mean_ci_lower ,mean_ci_upper  = np.quantile(pred_dist,[alpha/2,1-alpha/2],axis=1)
+            mean_se   = np.std(pred_dist,axis=0)
+            mean_ci_lower ,mean_ci_upper  = np.quantile(pred_dist,[alpha/2,1-alpha/2],axis=0)
             resid_low, resid_up = np.quantile(self.fit_resid,[alpha/2,1-alpha/2])
             obs_ci_lower = resid_low + mean_ci_lower
             obs_ci_upper  = resid_up + mean_ci_upper
@@ -408,8 +391,8 @@ class LinearModel:
         alpha     = 1 - ci_level
         
         def shift_diff(x):
-            shift = np.roll(x,shift=1,axis=0)
-            diff  = (x - shift)[1:,:]
+            shift = np.roll(x,shift=1,axis=1)
+            diff  = (x - shift)[:,1:]
             return diff
         def contrast_data(data):
             raw_data   = data.iloc[:-1,:].round(2).astype('str')
@@ -428,24 +411,24 @@ class LinearModel:
         # 均值的预测值对比
         pred            = self.bootstrap_pred(new_x=x)
         shift_diff_pred = shift_diff(pred)
-        diff            = shift_diff_pred.mean(axis=1)
-        diff_mean_std   = shift_diff_pred.std(axis=1)
+        diff            = shift_diff_pred.mean(axis=0)
+        diff_mean_std   = shift_diff_pred.std(axis=0)
         diff_mean_p     = []
-        for i in range(shift_diff_pred.shape[0]):
-            p_value = get_p_value(shift_diff_pred[i,:],hypothesis=hypothesis,alternative=alternative)
+        for i in range(shift_diff_pred.shape[1]):
+            p_value = get_p_value(shift_diff_pred[:,i],hypothesis=hypothesis,alternative=alternative)
             diff_mean_p.append(p_value)
-        diff_mean_lower ,diff_mean_upper  = np.quantile(shift_diff_pred,[alpha/2,1-alpha/2],axis=1)
+        diff_mean_lower ,diff_mean_upper  = np.quantile(shift_diff_pred,[alpha/2,1-alpha/2],axis=0)
         
         # 单个观测的预测值对比
         rng                 = np.random.default_rng(seed=self.rng_seed)
         pred_obs            = pred + rng.choice(self.fit_resid,size=pred.shape,replace=True)
         shift_diff_pred_obs = shift_diff(pred_obs)
-        diff_obs_std        = shift_diff_pred_obs.std(axis=1)
+        diff_obs_std        = shift_diff_pred_obs.std(axis=0)
         diff_obs_p          = []
-        for i in range(shift_diff_pred_obs.shape[0]):
-            p_value = get_p_value(shift_diff_pred_obs[i,:],hypothesis=hypothesis,alternative=alternative)
+        for i in range(shift_diff_pred_obs.shape[1]):
+            p_value = get_p_value(shift_diff_pred_obs[:,i],hypothesis=hypothesis,alternative=alternative)
             diff_obs_p.append(p_value)
-        diff_obs_lower ,diff_obs_upper  = np.quantile(shift_diff_pred_obs,[alpha/2,1-alpha/2],axis=1)
+        diff_obs_lower ,diff_obs_upper  = np.quantile(shift_diff_pred_obs,[alpha/2,1-alpha/2],axis=0)
         
         comparison = pd.DataFrame({
             'diff'        : diff,
