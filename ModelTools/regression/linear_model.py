@@ -1,4 +1,3 @@
-#TODO 统一n resamples的名称
 import re
 from typing import Union
 
@@ -6,31 +5,22 @@ import numpy as np
 import pandas as pd
 from scipy.stats import bootstrap
 from sklearn.base import clone
-from sklearn import linear_model as lm
 from sklearn.model_selection import GridSearchCV
 from patsy import dmatrices,build_design_matrices
 
+from ..utils.data_grid import DataGrid
+from .._src.tabulate import tabulate
+from .metric import Metric
+from .plot.distribution import plot_distribution
+from .plot.prediction import plot_prediction
+from .plot.check_model import plot_check_model
+from .model_config import (
+    _linear_model,
+    _default_param,
+    _cv_param_grid
+)
+
 class LinearModel:
-    linear_model = {
-        'OLS'  : lm.LinearRegression,
-        'HUBER': lm.HuberRegressor,
-        'EN'   : lm.ElasticNetCV,
-        'LASSO': lm.Lasso,
-        'QR'   : lm.QuantileRegressor,
-    }
-    default_param = {
-        'QR' : {
-            'solver' : 'highs'
-        }
-    }
-    cv_param_grid = {
-        'QR' : {
-            'alpha' : [0,.1,.5,.7,.9,.95,.99,1]
-        },
-        'LASSO':{
-            'alpha' : [1e-06, 1e-05, 1e-04, 1e-03, 1e-02, 1e-01, 1e+00, 1e+01,1e+02, 1e+03, 1e+04, 1e+05, 1e+06]
-        },
-    }
     
     def __init__(
         self,
@@ -80,18 +70,18 @@ class LinearModel:
     def fit(self,method='OLS',method_kwargs:dict=None,n_bootstrap=1000):
         
         # 模型默认参数
-        mod_default_param = self.default_param.get(method,{})
+        mod_default_param = _default_param.get(method,{})
         # 模型指定参数
         method_kwargs = {} if method_kwargs is None else method_kwargs
         # 合并参数
         mod_default_param.update(method_kwargs)
         
-        mod = self.linear_model[method](fit_intercept=False,**mod_default_param)
-        if method in self.cv_param_grid.keys():
+        mod = _linear_model[method](fit_intercept=False,**mod_default_param)
+        if method in _cv_param_grid.keys():
             # 交叉验证寻找超参数
             cv = GridSearchCV(
                 estimator  = mod,
-                param_grid = self.cv_param_grid[method],
+                param_grid = _cv_param_grid[method],
                 n_jobs     = -1,
                 refit      = True,
                 cv         = 5
@@ -99,16 +89,16 @@ class LinearModel:
             self.mod = cv.fit(X=self.x,y=self.y).best_estimator_
         else:
             self.mod = mod.fit(X=self.x, y=self.y)
-        self.train_resid = self.y - self.mod.predict(self.x)
+        self.fit_resid = self.y - self.mod.predict(self.x)
         
         if n_bootstrap > 0:
-            self.coef_dist = self.bootstrap_coef(n_resamples=n_bootstrap,re_boot=True)
+            self.coef_dist = self.bootstrap_coef(n_bootstrap=n_bootstrap,re_boot=True)
         else:
             self.coef_dist = None
         
         return self
 
-    def bootstrap_coef(self,n_resamples=1000,re_boot=False):
+    def bootstrap_coef(self,n_bootstrap=1000,re_boot=False):
         self._check_fitted()
         
         mod            = clone(self.mod)
@@ -125,7 +115,7 @@ class LinearModel:
         coef_dist = bootstrap(
             data             = bootstrap_data,
             statistic        = get_boot_coef,
-            n_resamples      = n_resamples,
+            n_resamples      = n_bootstrap,
             confidence_level = 0.5,
             paired           = True,
             random_state     = 0,
@@ -204,7 +194,6 @@ class LinearModel:
         return coef
     
     def get_metric(self, bootstrap=True, summary=True, ci_level=0.95) -> pd.DataFrame:
-        from .metric import Metric
         
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
         if (bootstrap == True) and (self.coef_dist is not None):
@@ -222,7 +211,6 @@ class LinearModel:
         return metric
     
     def plot_coef_dist(self,**plot_kwargs):
-        from .plot.distribution import plot_distribution
         plot = plot_distribution(
             data = self.coef_dist,
             **plot_kwargs
@@ -231,21 +219,82 @@ class LinearModel:
     
     def plot_coef_pair(self):
         ...
+        
+    def summary(self):
+        coef_info   = self.get_coef()
+        metric_info = self.get_metric()
+        print(
+            tabulate(coef_info,headers='keys')
+        )
+        print(
+            tabulate(metric_info,headers='keys')
+        )
     
-    def predict(
+    def plot_check(self,ppc_n_resample=50):
+        rng       = np.random.default_rng(self.rng_seed)
+        pred      = self._predict(new_data=self.data)
+        boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
+        boot_pred += rng.choice(self.fit_resid,size=boot_pred.shape,replace=True)
+        plot = plot_check_model(
+            residual     = self.fit_resid,
+            fitted_value = pred,
+            boot_pred    = boot_pred,
+            y_name       = self.y_col
+        )
+        return plot
+    
+    def slope(
         self,
-        new_data=None,
-        new_x=None,
-    ) -> np.ndarray:
-        self._check_fitted()
+        data_grid:dict,
+        var:list=None,
+        ci_level    = 0.95,
+        hypothesis  = 0,
+        alternative = 'two_side',
+        eps         = 1e-4
+    ):
+
+        # TODO 检查datagrid的合规性
+        data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
+        x         = self._model_dataframe(data,formula=self.formula_x)
+        alpha     = 1 - ci_level
+        pred = self.bootstrap_pred(x)
         
-        if new_data is not None:
-            new_x     = self._model_dataframe(new_data,formula=self.formula_x)
-        pred = self.mod.predict(new_x).flatten()
+        slope_var = data_grid.keys() if var is None else var
+        result_data = []
+        for var_name in slope_var:
+            
+            # 计算slope的分布
+            data_eps            = data.copy(deep=True)
+            data_eps[var_name] += eps
+            x_eps               = self._model_dataframe(data_eps,formula=self.formula_x)
+            pred_eps            = self.bootstrap_pred(x_eps)
+            slope_dist          = (pred_eps-pred)/eps
+            
+            # 基于完整数据计算的slope
+            pred_slope_mean = (self._predict(new_x=x_eps) - self._predict(new_x=x)) / eps
+            
+            # 聚合结果 
+            # TODO 增加统计推断
+            slope_result = pd.DataFrame(
+                {
+                    'term': var_name,
+                    'mean': pred_slope_mean,
+                    'std' : slope_dist.std(axis=1)
+                }
+            )
+            slope_result = pd.concat([slope_result,data],axis=1)
+            result_data.append(slope_result)
         
-        return pred
+        result_data = pd.concat(result_data,axis=0)
+        return result_data
     
-    def predict_frame(
+    def plot_slope(self):
+        ...
+    
+    def compare_slope(self):
+        ...
+    
+    def prediction(
         self, 
         new_data  :pd.DataFrame = None,
         data_grid:dict          = None,
@@ -262,7 +311,6 @@ class LinearModel:
             data = self.data
         
         elif new_data is None and data_grid is not None:
-            from ..utils.data_grid import DataGrid
             data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
         
         elif new_data is not None and data_grid is None:
@@ -287,6 +335,18 @@ class LinearModel:
         
         return predictions
     
+    def _predict(self, new_data=None, new_x=None) -> np.ndarray:
+        self._check_fitted()
+        
+        if new_data is None and new_x is None:
+            raise Exception('WRONG')
+        
+        if new_data is not None:
+            new_x     = self._model_dataframe(new_data,formula=self.formula_x)
+        pred = self.mod.predict(new_x).flatten()
+        
+        return pred
+    
     def _predict_interval(self,new_x,method,ci_level) -> pd.DataFrame:
         alpha = 1-ci_level
         if method == 'conformal':
@@ -301,7 +361,7 @@ class LinearModel:
             pred_dist = self.bootstrap_pred(new_x)
             mean_se   = np.std(pred_dist,axis=1)
             mean_ci_lower ,mean_ci_upper  = np.quantile(pred_dist,[alpha/2,1-alpha/2],axis=1)
-            resid_low, resid_up = np.quantile(self.train_resid,[alpha/2,1-alpha/2])
+            resid_low, resid_up = np.quantile(self.fit_resid,[alpha/2,1-alpha/2])
             obs_ci_lower = resid_low + mean_ci_lower
             obs_ci_upper  = resid_up + mean_ci_upper
             interval = pd.DataFrame({
@@ -323,11 +383,10 @@ class LinearModel:
         ci_type  :Union[str,list] = 'mean',
         **predict_kwargs
     ):
-        from .plot.prediction import plot_prediction
         
         predict_kwargs.update({'data_grid':data_grid})
         
-        prediction = self.predict_frame(**predict_kwargs)
+        prediction = self.prediction(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
         plot       = plot_prediction(
             data     = prediction,
@@ -344,7 +403,6 @@ class LinearModel:
         hypothesis  = 0,
         alternative = 'two_side',
     ):
-        from ..utils.data_grid import DataGrid
         data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid) # TODO 检查datagrid的合规性
         x         = self._model_dataframe(data,formula=self.formula_x)
         alpha     = 1 - ci_level
@@ -380,7 +438,7 @@ class LinearModel:
         
         # 单个观测的预测值对比
         rng                 = np.random.default_rng(seed=self.rng_seed)
-        pred_obs            = pred + rng.choice(self.train_resid,size=pred.shape,replace=True)
+        pred_obs            = pred + rng.choice(self.fit_resid,size=pred.shape,replace=True)
         shift_diff_pred_obs = shift_diff(pred_obs)
         diff_obs_std        = shift_diff_pred_obs.std(axis=1)
         diff_obs_p          = []
@@ -403,87 +461,12 @@ class LinearModel:
         comparison = pd.concat([contrast_data(data),comparison],axis=1)
         return comparison
     
-    def slope(
-        self,
-        data_grid:dict,
-        var:list=None,
-        ci_level    = 0.95,
-        hypothesis  = 0,
-        alternative = 'two_side',
-        eps         = 1e-4
-    ):
-
-        from ..utils.data_grid import DataGrid
-        # TODO 检查datagrid的合规性
-        data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
-        x         = self._model_dataframe(data,formula=self.formula_x)
-        alpha     = 1 - ci_level
-        pred = self.bootstrap_pred(x)
-        
-        slope_var = data_grid.keys() if var is None else var
-        result_data = []
-        for var_name in slope_var:
-            
-            # 计算slope的分布
-            data_eps            = data.copy(deep=True)
-            data_eps[var_name] += eps
-            x_eps               = self._model_dataframe(data_eps,formula=self.formula_x)
-            pred_eps            = self.bootstrap_pred(x_eps)
-            slope_dist          = (pred_eps-pred)/eps
-            
-            # 基于完整数据计算的slope
-            pred_slope_mean = (self.predict(new_x=x_eps) - self.predict(new_x=x)) / eps
-            
-            # 聚合结果 
-            # TODO 增加统计推断
-            slope_result = pd.DataFrame(
-                {
-                    'term': var_name,
-                    'mean': pred_slope_mean,
-                    'std' : slope_dist.std(axis=1)
-                }
-            )
-            slope_result = pd.concat([slope_result,data],axis=1)
-            result_data.append(slope_result)
-        
-        result_data = pd.concat(result_data,axis=0)
-        return result_data
-    
-    def plot_slope(self):
-        ...
-    
-    def compare_slope(self):
-        ...
-    
-    def summary(self):
-        coef_info   = self.get_coef()
-        metric_info = self.get_metric()
-        from .._src.tabulate import tabulate
-        print(
-            tabulate(coef_info,headers='keys')
-        )
-        print(
-            tabulate(metric_info,headers='keys')
-        )
-    
-    def plot_check(self,ppc_n_resample=50):
-        from .plot.check_model import plot_check_model
-        rng       = np.random.default_rng(self.rng_seed)
-        pred      = self.predict(new_data=self.data)
-        boot_pred = self.bootstrap_pred(n_resample=ppc_n_resample).T
-        boot_pred += rng.choice(self.train_resid,size=boot_pred.shape,replace=True)
-        plot = plot_check_model(
-            residual     = self.train_resid,
-            fitted_value = pred,
-            boot_pred    = boot_pred,
-            y_name       = self.y_col
-        )
-        return plot
-    
     def _check_fitted(self):
         if self.mod is None:
             raise Exception('Need fit first')
 
+def get_conf_int():
+    ...
 
 def get_p_value(sample:np.ndarray, hypothesis:float, alternative='two_side') -> float:
     sample    = sample.flatten()
@@ -503,28 +486,3 @@ def get_p_value(sample:np.ndarray, hypothesis:float, alternative='two_side') -> 
         raise Exception(f'WRONG alternative({alternative})')
         
     return p_value
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    from statsmodels.formula.api import ols
-    
-    rng = np.random.default_rng(0)
-    x   = rng.normal(0,0.1,1000).cumsum()
-    y   = rng.standard_t(df=1,size=1000)+3+2*x+x**2
-    
-    m   = LinearModel('y~x+I(x**2)+I(x**3)',data={'x':x,'y':y}).fit(method='HUBER')
-    # m.bootstrap_coef(n_resamples=1000)
-    # m.summary()
-    
-    print('coef',m.get_coef())
-    print(m.predict_frame(ci_method='bootstrap'))
-    
-    # pred = m.predict()
-    # print(pred)
-    
-    # x_new = rng.normal(0,1,10)
-    # print(m.predict(new_data={'x':x_new}))
-    
-    # plt.scatter(x,y)
-    # plt.plot(x,m.predict(),c='red')
-    # plt.show()
