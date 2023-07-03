@@ -228,21 +228,19 @@ class LinearModel:
     
     def slope(
         self,
-        data_grid:dict,
-        var:list=None,
-        ci_level    = 0.95,
-        hypothesis  = 0,
-        alternative = 'two_side',
-        eps         = 1e-4
+        new_data  : pd.DataFrame = None,
+        data_grid : dict         = None,
+        slope_var : list         = None,
+        ci_level  : float        = 0.95,
+        eps       : float        = 1e-4
     ):
 
-        # TODO 检查datagrid的合规性
-        data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
-        x         = self._model_dataframe(data,formula=self.formula_x)
-        alpha     = 1 - ci_level
-        pred = self.bootstrap_pred(x)
+        data  = self._get_data_from_new_or_grid(new_data,data_grid)
+        x     = self._model_dataframe(data,formula=self.formula_x)
+        alpha = 1 - ci_level
+        pred  = self.bootstrap_pred(x)
         
-        slope_var = data_grid.keys() if var is None else var
+        slope_var = data.drop([self.y_col],axis=1).columns if slope_var is None else slope_var
         result_data = []
         for var_name in slope_var:
             
@@ -251,18 +249,19 @@ class LinearModel:
             data_eps[var_name] += eps
             x_eps               = self._model_dataframe(data_eps,formula=self.formula_x)
             pred_eps            = self.bootstrap_pred(x_eps)
-            slope_dist          = (pred_eps-pred)/eps
+            slope_dist          = (pred_eps - pred) / eps
             
             # 基于完整数据计算的slope
             pred_slope_mean = (self._predict(new_x=x_eps) - self._predict(new_x=x)) / eps
             
             # 聚合结果 
-            # TODO 增加统计推断
             slope_result = pd.DataFrame(
                 {
-                    'term': var_name,
-                    'mean': pred_slope_mean,
-                    'std' : slope_dist.std(axis=0)
+                    'term'         : var_name,
+                    'mean'         : pred_slope_mean,
+                    'mean_se'      : slope_dist.std(axis=0),
+                    'mean_ci_lower': np.quantile(slope_dist,alpha/2,axis=0),
+                    'mean_ci_upper': np.quantile(slope_dist,1-alpha/2,axis=0),
                 }
             )
             slope_result = pd.concat([slope_result,data],axis=1)
@@ -271,35 +270,32 @@ class LinearModel:
         result_data = pd.concat(result_data,axis=0)
         return result_data
     
-    def plot_slope(self):
-        ...
+    def plot_slope(
+        self,
+        data_grid:dict,
+        slope_var,
+        plot_var,
+        **slope_kwargs
+    ):
+        slope_kwargs.update({'data_grid':data_grid,'slope_var':slope_var})
+        slope = self.slope(**slope_kwargs)
+        plot = ...
+        return plot
     
     def compare_slope(self):
         ...
     
     def prediction(
         self, 
-        new_data  :pd.DataFrame = None,
-        data_grid:dict          = None,
-        ci_level  :float        = 0.95,
-        ci_method:str           = 'bootstrap'
+        new_data  : pd.DataFrame  = None,
+        data_grid : dict          = None,
+        ci_level  : float         = 0.95,
+        ci_method : str           = 'bootstrap'
     ) -> pd.DataFrame:
         
         self._check_fitted()
-        
-        if new_data is not None and data_grid is not None:
-            raise Exception('WRONG')
-        
-        elif new_data is None and data_grid is None:
-            data = self.data
-        
-        elif new_data is None and data_grid is not None:
-            data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
-        
-        elif new_data is not None and data_grid is None:
-            data = self._init_data(new_data)
-        
-        new_x     = self._model_dataframe(data,formula=self.formula_x)
+        data  = self._get_data_from_new_or_grid(new_data,data_grid)
+        new_x = self._model_dataframe(data,formula=self.formula_x)
         
         # 点预测
         pred = self.mod.predict(new_x).flatten()
@@ -447,6 +443,22 @@ class LinearModel:
     def _check_fitted(self):
         if self.mod is None:
             raise Exception('Need fit first')
+    
+    def _get_data_from_new_or_grid(self,new_data,data_grid):
+        # TODO 检查datagrid的合规性
+        if new_data is not None and data_grid is not None:
+            raise Exception('WRONG')
+        
+        elif new_data is None and data_grid is None:
+            data = self.data
+        
+        elif new_data is None and data_grid is not None:
+            data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
+        
+        elif new_data is not None and data_grid is None:
+            data = self._init_data(new_data)
+        
+        return data
 
 def get_conf_int():
     ...
