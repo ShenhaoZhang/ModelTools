@@ -240,7 +240,7 @@ class LinearModel:
         alpha = 1 - ci_level
         pred  = self.bootstrap_pred(x)
         
-        slope_var = data.drop([self.y_col],axis=1).columns if slope_var is None else slope_var
+        slope_var = data.columns if slope_var is None else slope_var
         result_data = []
         for var_name in slope_var:
             
@@ -273,13 +273,16 @@ class LinearModel:
     def plot_slope(
         self,
         data_grid:dict,
-        slope_var,
-        plot_var,
         **slope_kwargs
     ):
+        slope_var = list(data_grid.keys())[0]
         slope_kwargs.update({'data_grid':data_grid,'slope_var':slope_var})
         slope = self.slope(**slope_kwargs)
-        plot = ...
+        plot = plot_prediction(
+            data     = slope,
+            plot_var = list(data_grid.keys()),
+            ci_type  = 'mean'
+        )
         return plot
     
     def compare_slope(self):

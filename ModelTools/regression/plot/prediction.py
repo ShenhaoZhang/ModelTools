@@ -16,7 +16,6 @@ def plot_prediction(
     
     plot = (
         data
-        .round(2)
         .pipe(gg.ggplot)
         + gg.aes(**aes)
         + gg.geom_line()
