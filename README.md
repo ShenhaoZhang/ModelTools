@@ -1,8 +1,35 @@
 # ModelTools 
 
 
-# 模型的解释
-## 模型的偏效应
-### Partial (PDP)
-### Conditional
-### Accumulated (ALE)
+# 模型训练
+
+1. fit
+1. bootstrap_coef
+1. bootstrap_pred
+
+# 模型参数
+
+1. coef
+1. plot_coef_dist
+1. plot_coef_pair
+
+# 模型检查
+
+1. plot_check
+
+# 模型评价
+
+1. metric
+
+# 模型解释
+
+1. slope
+1. plot_slope
+1. compare_slope
+
+1. prediction
+1. plot_prediction
+1. compare_prediction
+
+# 其他
+1. summary

@@ -88,16 +88,16 @@ class LinearModel:
             self.mod = cv.fit(X=self.x,y=self.y).best_estimator_
         else:
             self.mod = mod.fit(X=self.x, y=self.y)
-        self.fit_resid = self.y - self.mod.predict(self.x)
         
-        if n_bootstrap > 0:
-            self.coef_dist = self.bootstrap_coef(n_bootstrap=n_bootstrap,re_boot=True)
-        else:
-            self.coef_dist = None
+        self.fit_resid = self.y - self.mod.predict(self.x)
+        self.coef_dist = self.bootstrap_coef(n_bootstrap=n_bootstrap,re_boot=True)
         
         return self
 
-    def bootstrap_coef(self,n_bootstrap=1000,re_boot=False):
+    def bootstrap_coef(self,n_bootstrap:int=1000,re_boot:bool=False) -> pd.DataFrame:
+        if n_bootstrap <= 0:
+            return None
+        
         self._check_fitted()
         
         rng       = np.random.default_rng(seed=self.rng_seed)
@@ -136,7 +136,7 @@ class LinearModel:
         
         return pred_dist
     
-    def get_coef(self, hypothesis:float=0, alternative='two_side', ci_level=0.95) -> pd.DataFrame:
+    def coef(self, hypothesis:float=0, alternative='two_side', ci_level=0.95) -> pd.DataFrame:
         self._check_fitted()
         
         coef_name  = self.x.columns
@@ -176,7 +176,17 @@ class LinearModel:
             
         return coef
     
-    def get_metric(self, bootstrap=True, summary=True, ci_level=0.95) -> pd.DataFrame:
+    def plot_coef_dist(self,**plot_kwargs):
+        plot = plot_distribution(
+            data = self.coef_dist,
+            **plot_kwargs
+        )
+        return plot
+    
+    def plot_coef_pair(self):
+        ...
+    
+    def metric(self, bootstrap=True, summary=True, ci_level=0.95) -> pd.DataFrame:
         
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
         if (bootstrap == True) and (self.coef_dist is not None):
@@ -192,20 +202,10 @@ class LinearModel:
             else:
                 metric = metric_boot
         return metric
-    
-    def plot_coef_dist(self,**plot_kwargs):
-        plot = plot_distribution(
-            data = self.coef_dist,
-            **plot_kwargs
-        )
-        return plot
-    
-    def plot_coef_pair(self):
-        ...
         
     def summary(self):
-        coef_info   = self.get_coef()
-        metric_info = self.get_metric()
+        coef_info   = self.coef()
+        metric_info = self.metric()
         print(
             tabulate(coef_info,headers='keys')
         )
@@ -233,14 +233,21 @@ class LinearModel:
         slope_var : list         = None,
         ci_level  : float        = 0.95,
         eps       : float        = 1e-4
-    ):
+    ) -> pd.DataFrame:
 
         data  = self._get_data_from_new_or_grid(new_data,data_grid)
         x     = self._model_dataframe(data,formula=self.formula_x)
         alpha = 1 - ci_level
         pred  = self.bootstrap_pred(x)
         
-        slope_var = data.columns if slope_var is None else slope_var
+        # 指定斜率对应的变量
+        if isinstance(slope_var,str):
+            slope_var = [slope_var]
+        elif slope_var is None:
+            slope_var = data.columns.to_list()
+        elif not isinstance(slope_var,list):
+            raise Exception('slope_var必须是list')
+        
         result_data = []
         for var_name in slope_var:
             
@@ -384,7 +391,7 @@ class LinearModel:
         ci_level    = 0.95,
         hypothesis  = 0,
         alternative = 'two_side',
-    ):
+    ) -> pd.DataFrame:
         data      = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid) # TODO 检查datagrid的合规性
         x         = self._model_dataframe(data,formula=self.formula_x)
         alpha     = 1 - ci_level
