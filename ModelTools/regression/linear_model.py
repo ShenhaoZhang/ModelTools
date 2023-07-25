@@ -11,7 +11,7 @@ from ..utils.data_grid import DataGrid
 from .._src.tabulate import tabulate
 from .metric import Metric
 from .plot.distribution import plot_distribution
-from .plot.prediction import plot_prediction
+from .plot.grid import plot_grid
 from .plot.check_model import plot_check_model
 from .model_config import (
     _linear_model,
@@ -186,7 +186,7 @@ class LinearModel:
     def plot_coef_pair(self):
         ...
     
-    def metric(self, bootstrap=True, summary=True, ci_level=0.95) -> pd.DataFrame:
+    def metric(self, bootstrap=False, summary=True, ci_level=0.95) -> pd.DataFrame:
         
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
         if (bootstrap == True) and (self.coef_dist is not None):
@@ -202,6 +202,9 @@ class LinearModel:
             else:
                 metric = metric_boot
         return metric
+    
+    def plot_metric(self):
+        ...
         
     def summary(self):
         coef_info   = self.coef()
@@ -285,10 +288,11 @@ class LinearModel:
         slope_var = list(data_grid.keys())[0]
         slope_kwargs.update({'data_grid':data_grid,'slope_var':slope_var})
         slope = self.slope(**slope_kwargs)
-        plot = plot_prediction(
+        plot = plot_grid(
             data     = slope,
             plot_var = list(data_grid.keys()),
-            ci_type  = 'mean'
+            ci_type  = 'mean',
+            h_line   = 0
         )
         return plot
     
@@ -377,7 +381,7 @@ class LinearModel:
         
         prediction = self.prediction(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
-        plot       = plot_prediction(
+        plot       = plot_grid(
             data     = prediction,
             plot_var = plot_var,
             ci_type  = ci_type
