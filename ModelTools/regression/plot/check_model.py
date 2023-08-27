@@ -22,10 +22,11 @@ def plot_check_model(
     fig.tight_layout(h_pad=5,w_pad=2)
     fontdict = {'fontsize':10}
     
+    #TODO lowess拟合部分数据
     smooth = lowess(residual,fitted_value)
     ax[0,0].scatter(x=fitted_value,y=residual,s=10,c='#1b6ca8')
     ax[0,0].plot(smooth[:,0],smooth[:,1],color='green')
-    ax[0,0].hlines(y=0,xmin=0,xmax=1,transform=ax[0,0].get_yaxis_transform(),linestyles='--',color='black')
+    ax[0,0].hlines(y=0,xmin=fitted_value.min(),xmax=fitted_value.max(),linestyles='--',color='black')
     ax[0,0].set_title('Linearity \nReference line should be flate and horizontal',loc='left',fontdict=fontdict)
     ax[0,0].set_xlabel('Fitted values')
     ax[0,0].set_ylabel('Residuals')
@@ -33,6 +34,7 @@ def plot_check_model(
     ax[0,1].set_title('Homogeneity of Variance \nReference line should be flat and horizontal',loc='left',fontdict=fontdict)
     ax[0,1].set_xlabel('Fitted values')
     ax[0,1].set_ylabel('abs(std_residuals)')
+    #TODO lowess拟合部分数据
     smooth = lowess(abs_std_residual,fitted_value)
     ax[0,1].scatter(x=fitted_value,y=abs_std_residual,s=10,c='#1b6ca8')
     ax[0,1].plot(smooth[:,0],smooth[:,1],color='green')
@@ -64,4 +66,5 @@ def plot_kde(x,ax,c,linewidth=1,alpha=1):
     x = np.sort(x)
     pdf = gaussian_kde(x).pdf(x)
     ax.plot(x,pdf,color=c,linewidth=linewidth,alpha=alpha)
-    ax.ticklabel_format(style='sci',axis='y',scilimits=[-3,1],useMathText=True)
+    ax.ticklabel_format(style='sci',axis='y',scilimits=[-1,1],useMathText=True)
+    ax.get_yaxis().get_offset_text().set_visible(False)
