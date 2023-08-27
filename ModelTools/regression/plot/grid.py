@@ -5,7 +5,8 @@ def plot_grid(
     data    : pd.DataFrame,
     plot_var: list,
     ci_type : str,
-    h_line  : int = None
+    h_line  : int = None,
+    y_label : str = 'y'
 ):
     # if len(plot_var)>4:
     #     raise Exception('WRONG')
@@ -25,13 +26,15 @@ def plot_grid(
     
     if len(plot_var) >= 2:
         plot += gg.labs(color=plot_var[1],fill=plot_var[1])
-    plot += gg.labs(y='Mean')
+    plot += gg.labs(y=y_label)
     
     # 区间估计
     ci_type = [ci_type] if not isinstance(ci_type,list) else ci_type
     for ci in ci_type:
         ci_lower = ci + '_ci_lower'
         ci_upper = ci + '_ci_upper'
+        if ci_lower not in data.columns:
+            continue
         plot += gg.geom_ribbon(gg.aes(ymin=ci_lower,ymax=ci_upper),alpha=0.3,outline_type=None)
     
     # 分面

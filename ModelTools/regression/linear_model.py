@@ -23,36 +23,42 @@ class LinearModel:
     
     def __init__(
         self,
-        formula:str,
-        data:Union[dict,pd.DataFrame],
-        rng_seed=0
+        formula      : str,
+        data         : Union[dict,pd.DataFrame],
+        scale        : bool  = False,
+        show_progress: bool  = True,
+        rng_seed     : float = 0
     ) -> None:
         
-        self.formula   = formula
-        self.formula_x = re.findall('~(.+)',self.formula)[0]
-        self.y_col     = re.findall('(.+)~',self.formula)[0]
-        self.data      = self._init_data(data) 
-        self.x,self.y  = self._model_dataframe(data=self.data,formula=self.formula)
-        self.mod       = None
-        self.coef_dist = None
-        self.rng_seed  = rng_seed
+        self.formula       = formula
+        self.formula_x     = re.findall('~(.+)',self.formula)[0]
+        self.y_col         = re.findall('(.+)~',self.formula)[0]
+        self.scale         = scale
+        self.data          = self._init_data(data) 
+        self.x,self.y      = self._model_dataframe(data=self.data,formula=self.formula)
+        self.mod           = None
+        self.coef_dist     = None
+        self.show_progress = show_progress
+        self.rng_seed      = rng_seed
         
     def _init_data(self,data) -> pd.DataFrame:
         
         if isinstance(data,pd.DataFrame):
             data = data.reset_index(drop=True)
-            return data
+        elif isinstance(data,(dict,list,tuple)) :
+            data = pd.DataFrame(data)
         
-        if isinstance(data,dict):
-            return pd.DataFrame(data)
+        return data
         
-        if isinstance(data,(list,tuple)):
-            return pd.DataFrame(data)
-    
+        
     def _model_dataframe(self,data,formula) -> Union[tuple,pd.DataFrame]:
         
         def matrix_to_df(matrix):
-            return pd.DataFrame(data=np.asarray(matrix),columns=matrix.design_info.column_names)
+            data = np.asarray(matrix)
+            if self.scale:
+                data = (data - data.mean()) / (2 * data.std())
+            df = pd.DataFrame(data=data,columns=matrix.design_info.column_names)
+            return df
         
         if '~' in formula:
             matrices = dmatrices(formula,data)
@@ -107,7 +113,7 @@ class LinearModel:
         mod       = clone(self.mod)
         
         coef_dist = []
-        for i in range(n_bootstrap):
+        for _ in get_progress_bar(range(n_bootstrap),self.show_progress):
             sample_index = rng.choice(all_index,size=data_size,replace=True)
             sample_x     = x[sample_index,:]
             sample_y     = self.y[sample_index]
@@ -128,9 +134,9 @@ class LinearModel:
         #TODO
         mod = clone(self.mod).fit(self.x.iloc[0:10,:],self.y[0:10])
         pred_dist = []    
-        for coef in coef_dist:
+        for coef in get_progress_bar(coef_dist,self.show_progress):
             mod.coef_ = coef
-            pred = mod.predict(new_x)
+            pred      = mod.predict(new_x)
             pred_dist.append(pred)
         pred_dist = np.row_stack(pred_dist)
         
@@ -279,7 +285,8 @@ class LinearModel:
             data     = slope,
             plot_var = list(data_grid.keys()),
             ci_type  = 'mean',
-            h_line   = 0
+            h_line   = 0,
+            y_label  = self.y_col
         )
         return plot
     
@@ -301,7 +308,7 @@ class LinearModel:
         # 点预测
         pred = self.mod.predict(new_x).flatten()
         # 区间预测
-        if ci_method is not None:
+        if (ci_method is not None) and (self.coef_dist is not None):
             interval = self._predict_interval(new_x,ci_level=ci_level,method=ci_method)
         else:
             interval = None
@@ -371,7 +378,8 @@ class LinearModel:
         plot       = plot_grid(
             data     = prediction,
             plot_var = plot_var,
-            ci_type  = ci_type
+            ci_type  = ci_type,
+            y_label  = self.y_col
         )
 
         return plot
@@ -482,3 +490,13 @@ def get_p_value(sample:np.ndarray, hypothesis:float, alternative='two_side') -> 
         raise Exception(f'WRONG alternative({alternative})')
         
     return p_value
+
+def get_progress_bar(iter,show_progress):
+    if show_progress == False:
+        return iter
+    try:
+        from tqdm import tqdm
+        iter = tqdm(iter)
+    except:
+        pass
+    return iter
