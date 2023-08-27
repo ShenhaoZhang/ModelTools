@@ -210,22 +210,9 @@ class LinearModel:
             
         return coef
     
-    def get_metric(self,bootstrap=True,summary=True,CI_level=0.95) -> pd.DataFrame:
+    def get_metric(self) -> pd.DataFrame:
         from .metric import Metric
-        
         metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
-        if (bootstrap == True) and (self.bootstrap_coef is not None):
-            bootstrap_pred = list(self.bootstrap_pred(self.x).T)
-            metric_boot    = Metric(self.y,bootstrap_pred).get_metric()
-            if summary == True:
-                lower_level  = (1 - CI_level) / 2
-                upper_level  = CI_level + (1 - CI_level) / 2
-                metric_std   = metric_boot.std(axis=0,ddof=1).to_frame().T
-                metric_ci    = metric_boot.quantile([lower_level,upper_level],axis=0)
-                metric       = pd.concat([metric,metric_std,metric_ci],axis=0)
-                metric.index = ['estimate','std_error','ci_lower','ci_upper']
-            else:
-                metric = metric_boot
         return metric
     
     def plot_coef_dist(self,**plot_kwargs):
