@@ -25,7 +25,6 @@ class LinearModel:
         self,
         formula      : str,
         data         : Union[dict,pd.DataFrame],
-        scale        : bool  = False,
         show_progress: bool  = True,
         rng_seed     : float = 0
     ) -> None:
@@ -33,21 +32,31 @@ class LinearModel:
         self.formula       = formula
         self.formula_x     = re.findall('~(.+)',self.formula)[0]
         self.y_col         = re.findall('(.+)~',self.formula)[0]
-        self.scale         = scale
-        self.data          = self._init_data(data) 
+        self.data          = self._init_data(new_data=data) 
         self.x,self.y      = self._model_dataframe(data=self.data,formula=self.formula)
         self.mod           = None
         self.coef_dist     = None
         self.show_progress = show_progress
         self.rng_seed      = rng_seed
         
-    def _init_data(self,data) -> pd.DataFrame:
         
-        if isinstance(data,pd.DataFrame):
-            data = data.reset_index(drop=True)
-        elif isinstance(data,(dict,list,tuple)) :
-            data = pd.DataFrame(data)
+    def _init_data(self,new_data=None,data_grid=None):
+        # TODO 检查datagrid的合规性
+        if new_data is not None and data_grid is not None:
+            raise Exception('WRONG')
         
+        elif new_data is None and data_grid is None:
+            data = self.data
+        
+        elif new_data is None and data_grid is not None:
+            data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
+        
+        elif new_data is not None and data_grid is None:
+            if isinstance(new_data,pd.DataFrame):
+                data = new_data.reset_index(drop=True)
+            elif isinstance(new_data,(dict,list,tuple)) :
+                data = pd.DataFrame(new_data)
+            
         return data
         
         
@@ -55,9 +64,7 @@ class LinearModel:
         
         def matrix_to_df(matrix):
             data = np.asarray(matrix)
-            if self.scale:
-                data = (data - data.mean()) / (2 * data.std())
-            df = pd.DataFrame(data=data,columns=matrix.design_info.column_names)
+            df   = pd.DataFrame(data=data,columns=matrix.design_info.column_names)
             return df
         
         if '~' in formula:
@@ -80,13 +87,20 @@ class LinearModel:
         method_kwargs = {} if method_kwargs is None else method_kwargs
         # 合并参数
         mod_default_param.update(method_kwargs)
-        
+                
         mod = _linear_model[method](fit_intercept=False,**mod_default_param)
         if method in _cv_param_grid.keys():
+            
+            # 从待交叉验证的参数中移除已指定的参数
+            cv_param_grid:dict = _cv_param_grid.copy()[method]
+            for method_kw in mod_default_param.keys():
+                if method_kw in cv_param_grid.keys():
+                    cv_param_grid.pop(method_kw)
+            
             # 交叉验证寻找超参数
             cv = GridSearchCV(
                 estimator  = mod,
-                param_grid = _cv_param_grid[method],
+                param_grid = cv_param_grid,
                 n_jobs     = -1,
                 refit      = True,
                 cv         = 5
@@ -231,7 +245,7 @@ class LinearModel:
         eps       : float        = 1e-4
     ) -> pd.DataFrame:
 
-        data  = self._get_data_from_new_or_grid(new_data,data_grid)
+        data  = self._init_data(new_data,data_grid)
         x     = self._model_dataframe(data,formula=self.formula_x)
         alpha = 1 - ci_level
         pred  = self.bootstrap_pred(x)
@@ -302,7 +316,7 @@ class LinearModel:
     ) -> pd.DataFrame:
         
         self._check_fitted()
-        data  = self._get_data_from_new_or_grid(new_data,data_grid)
+        data  = self._init_data(new_data,data_grid)
         new_x = self._model_dataframe(data,formula=self.formula_x)
         
         # 点预测
@@ -453,21 +467,6 @@ class LinearModel:
         if self.mod is None:
             raise Exception('Need fit first')
     
-    def _get_data_from_new_or_grid(self,new_data,data_grid):
-        # TODO 检查datagrid的合规性
-        if new_data is not None and data_grid is not None:
-            raise Exception('WRONG')
-        
-        elif new_data is None and data_grid is None:
-            data = self.data
-        
-        elif new_data is None and data_grid is not None:
-            data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
-        
-        elif new_data is not None and data_grid is None:
-            data = self._init_data(new_data)
-        
-        return data
 
 def get_conf_int():
     ...

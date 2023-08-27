@@ -30,8 +30,9 @@ class DataGrid:
         if 'line' in var_method:
             num       = re.findall('line(\d+)',var_method)
             num       = int(num[0]) if len(num)>0 else 30
-            min_value = var_value.min()
-            max_value = var_value.max()
+            # 最大和最小值增加偏移，防止出现外推的情况
+            min_value = var_value.min() + 1e-4
+            max_value = var_value.max() - 1e-4
             result    = np.linspace(min_value,max_value,num)
             
         elif var_method == 'minmax':
@@ -45,7 +46,7 @@ class DataGrid:
         elif var_method == 'meansd':
             mean   = np.mean(var_value)
             sd     = np.std(var_value)
-            result = [mean-sd,mean+sd]
+            result = [mean-sd,mean,mean+sd]
         
         elif var_method == 'raw':
             result = np.unique(var_value)
