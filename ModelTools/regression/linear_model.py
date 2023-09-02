@@ -11,7 +11,7 @@ from ..utils.data_grid import DataGrid
 from .._src.tabulate import tabulate
 from .metric import Metric
 from .plot.distribution import plot_distribution
-from .plot.grid import plot_grid
+from .plot.grid import plot_grid,plot_all_grid
 from .plot.check_model import plot_check_model
 from .model_config import (
     _linear_model,
@@ -396,6 +396,50 @@ class LinearModel:
             y_label  = self.y_col
         )
 
+        return plot
+    
+    def plot_all_prediction(
+        self,
+        plot_x  :list            = None,
+        color_by:dict            = None,
+        free_y  :bool            = False,
+        ci_type :Union[str,list] = 'mean',
+    ):
+        if plot_x is None:
+            plot_x = self.data.drop(self.y_col,axis=1).columns
+        else:
+            plot_x = pd.Index(plot_x)
+        
+        color_by = color_by if color_by is not None else {}
+        if len(color_by) == 0:
+            color_x = None
+        elif len(color_by) == 1:
+            color_x = list(color_by.keys())[0]
+        elif len(color_by) > 1:
+            raise Exception('WRONG color_by')
+        
+        pred_grid = []
+        for x in plot_x:
+            if x in color_by.keys():
+                continue
+            data_grid = {x:'line',**color_by}
+            pred = (
+                self.prediction(data_grid=data_grid)
+                .drop(plot_x.difference(data_grid.keys()),axis=1)
+                .rename({x:'x_value'},axis=1)
+                .assign(x_name=x)
+            )
+            pred_grid.append(pred)
+        pred_grid = pd.concat(pred_grid,axis=0)
+        
+        plot = plot_all_grid(
+            data    = pred_grid,
+            free_y  = free_y,
+            ci_type = ci_type,
+            y_label = self.y_col,
+            color_x = color_x
+        )
+        
         return plot
     
     def compare_prediction(

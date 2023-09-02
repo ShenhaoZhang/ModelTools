@@ -29,13 +29,7 @@ def plot_grid(
     plot += gg.labs(y=y_label)
     
     # 区间估计
-    ci_type = [ci_type] if not isinstance(ci_type,list) else ci_type
-    for ci in ci_type:
-        ci_lower = ci + '_ci_lower'
-        ci_upper = ci + '_ci_upper'
-        if ci_lower not in data.columns:
-            continue
-        plot += gg.geom_ribbon(gg.aes(ymin=ci_lower,ymax=ci_upper),alpha=0.3,outline_type=None)
+    plot = _add_ci_plot(plot,data,ci_type)
     
     # 分面
     if len(plot_var) >= 3:
@@ -48,4 +42,44 @@ def plot_grid(
     
     # plot += gg.geom_rug(gg.aes(x=plot_var[0]),data=self.data,inherit_aes=False)
     
+    return plot
+
+def plot_all_grid(
+    data   : pd.DataFrame,
+    free_y : bool,
+    ci_type: str,
+    y_label: str,
+    color_x: str
+):
+    
+    scales = 'free' if free_y else 'free_x'
+    aes = {'x':'x_value','y':'mean'}
+    if color_x is not None:
+        aes.update({
+            'color':f'factor(round({color_x},4))',
+            'fill' :f'factor(round({color_x},4))'
+        })
+    
+    plot = (
+        gg.ggplot(data=data)+
+        gg.aes(**aes)+
+        gg.facet_wrap(facets='x_name',scales=scales)+
+        gg.geom_line()
+    )
+    
+    plot = _add_ci_plot(plot,data,ci_type)
+    plot += gg.labs(y=y_label,x='',color=color_x,fill=color_x)
+    
+    return plot
+
+
+def _add_ci_plot(plot,data,ci_type):
+    # 区间估计
+    ci_type = [ci_type] if not isinstance(ci_type,list) else ci_type
+    for ci in ci_type:
+        ci_lower = ci + '_ci_lower'
+        ci_upper = ci + '_ci_upper'
+        if ci_lower not in data.columns:
+            continue
+        plot += gg.geom_ribbon(gg.aes(ymin=ci_lower,ymax=ci_upper),alpha=0.3,outline_type=None)
     return plot

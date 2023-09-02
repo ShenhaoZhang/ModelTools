@@ -25,10 +25,12 @@
 
 1. slope
 1. plot_slope
+1. plot_all_slope
 1. compare_slope
 
 1. prediction
 1. plot_prediction
+1. plot_all_prediction
 1. compare_prediction
 
 # 其他
