@@ -238,11 +238,11 @@ class LinearModel:
     
     def slope(
         self,
-        new_data  : pd.DataFrame = None,
-        data_grid : dict         = None,
-        slope_var : list         = None,
-        ci_level  : float        = 0.95,
-        eps       : float        = 1e-4
+        new_data  : pd.DataFrame    = None,
+        data_grid : dict            = None,
+        slope_var : Union[str,list] = None,
+        ci_level  : float           = 0.95,
+        eps       : float           = 1e-4
     ) -> pd.DataFrame:
 
         data  = self._init_data(new_data,data_grid)
@@ -251,10 +251,14 @@ class LinearModel:
         pred  = self.bootstrap_pred(x)
         
         # 指定斜率对应的变量
+        if data_grid is not None :
+            if slope_var is not None:
+                raise Exception('给定data_grid后，slope_var默认是第一个变量，不能人为指定')
+            else:
+                slope_var = list(data_grid.keys())[0]
+        
         if isinstance(slope_var,str):
             slope_var = [slope_var]
-        elif slope_var is None:
-            slope_var = data.columns.to_list()
         elif not isinstance(slope_var,list):
             raise Exception('slope_var必须是list')
         
@@ -289,19 +293,76 @@ class LinearModel:
     
     def plot_slope(
         self,
-        data_grid:dict,
+        data_grid: dict,
+        show_rug : bool = True,
+        abline   : Union[float,list] = 0,
         **slope_kwargs
     ):
-        slope_var = list(data_grid.keys())[0]
-        slope_kwargs.update({'data_grid':data_grid,'slope_var':slope_var})
+        slope_kwargs.update({'data_grid':data_grid,'slope_var':None})
         slope = self.slope(**slope_kwargs)
+        raw_data = self.data if show_rug else None
+        
         plot = plot_grid(
-            data     = slope,
-            plot_var = list(data_grid.keys()),
-            ci_type  = 'mean',
-            h_line   = 0,
-            y_label  = self.y_col
+            grid_data = slope,
+            raw_data  = raw_data,
+            plot_var  = list(data_grid.keys()),
+            ci_type   = 'mean',
+            h_line    = abline,
+            y_label   = self.y_col
         )
+        return plot
+    
+    def plot_all_slope(
+        self,
+        plot_x   :list               = None,
+        color_by :dict               = None,
+        free_y   :bool               = False,
+        ci_type  :Union[str,list]    = 'mean',
+        show_rug : bool              = False,
+        abline   : Union[float,list] = 0,
+    ):
+        if plot_x is None:
+            plot_x = self.data.drop(self.y_col,axis=1).columns
+        else:
+            plot_x = pd.Index(plot_x)
+        
+        color_by = color_by if color_by is not None else {}
+        if len(color_by) == 0:
+            color_x = None
+        elif len(color_by) == 1:
+            color_x = list(color_by.keys())[0]
+        elif len(color_by) > 1:
+            raise Exception('WRONG color_by')
+        
+        raw_data  = []
+        slope_grid = []
+        for x in plot_x:
+            if x in color_by.keys():
+                continue
+            data_grid = {x:'line',**color_by}
+            slope = (
+                self.slope(data_grid=data_grid)
+                .drop(plot_x.difference(data_grid.keys()),axis=1)
+                .rename({x:'x_value','term':'x_name'},axis=1)
+            )
+            slope_grid.append(slope)
+            if show_rug:
+                raw_data_x = self.data.loc[:,[x]].assign(x_name=x).rename({x:'x_value'},axis=1)
+                raw_data.append(raw_data_x)
+            
+        slope_grid = pd.concat(slope_grid,axis=0)
+        raw_data   = pd.concat(raw_data,axis=0) if show_rug else None
+        
+        plot = plot_all_grid(
+            grid_data = slope_grid,
+            raw_data  = raw_data,
+            free_y    = free_y,
+            ci_type   = ci_type,
+            y_label   = self.y_col,
+            color_x   = color_x,
+            h_line    = abline
+        )
+        
         return plot
     
     def compare_slope(self):
@@ -380,8 +441,9 @@ class LinearModel:
     
     def plot_prediction(
         self,
-        data_grid:dict,
-        ci_type  :Union[str,list] = 'mean',
+        data_grid: dict,
+        ci_type  : Union[str,list] = 'mean',
+        show_rug : bool = True,
         **predict_kwargs
     ):
         
@@ -389,11 +451,13 @@ class LinearModel:
         
         prediction = self.prediction(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
+        raw_data   = self.data if show_rug else None
         plot       = plot_grid(
-            data     = prediction,
-            plot_var = plot_var,
-            ci_type  = ci_type,
-            y_label  = self.y_col
+            grid_data = prediction,
+            raw_data  = raw_data,
+            plot_var  = plot_var,
+            ci_type   = ci_type,
+            y_label   = self.y_col
         )
 
         return plot
@@ -404,6 +468,7 @@ class LinearModel:
         color_by:dict            = None,
         free_y  :bool            = False,
         ci_type :Union[str,list] = 'mean',
+        show_rug : bool = True,
     ):
         if plot_x is None:
             plot_x = self.data.drop(self.y_col,axis=1).columns
@@ -418,6 +483,7 @@ class LinearModel:
         elif len(color_by) > 1:
             raise Exception('WRONG color_by')
         
+        raw_data  = []
         pred_grid = []
         for x in plot_x:
             if x in color_by.keys():
@@ -430,14 +496,20 @@ class LinearModel:
                 .assign(x_name=x)
             )
             pred_grid.append(pred)
+            if show_rug:
+                raw_data_x = self.data.loc[:,[x]].assign(x_name=x).rename({x:'x_value'},axis=1)
+                raw_data.append(raw_data_x)
+            
         pred_grid = pd.concat(pred_grid,axis=0)
+        raw_data  = pd.concat(raw_data,axis=0) if show_rug else None
         
         plot = plot_all_grid(
-            data    = pred_grid,
-            free_y  = free_y,
-            ci_type = ci_type,
-            y_label = self.y_col,
-            color_x = color_x
+            grid_data = pred_grid,
+            raw_data  = raw_data,
+            free_y    = free_y,
+            ci_type   = ci_type,
+            y_label   = self.y_col,
+            color_x   = color_x
         )
         
         return plot

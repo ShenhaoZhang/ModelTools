@@ -2,34 +2,29 @@ import pandas as pd
 import plotnine as gg 
 
 def plot_grid(
-    data    : pd.DataFrame,
-    plot_var: list,
-    ci_type : str,
-    h_line  : int = None,
-    y_label : str = 'y'
+    grid_data: pd.DataFrame,
+    raw_data : pd.DataFrame,
+    plot_var : list,
+    ci_type  : str,
+    h_line   : int = None,
+    y_label  : str = 'y',
 ):
-    # if len(plot_var)>4:
-    #     raise Exception('WRONG')
+    if len(plot_var)>4:
+        raise Exception('WRONG')
     
     aes = {'x':plot_var[0],'y':'mean'}
     if len(plot_var) >= 2:
         aes['color'] = f'factor(round({plot_var[1]},2))'
         aes['fill']  = f'factor(round({plot_var[1]},2))'
     
-    plot = (
-        data
-        .pipe(gg.ggplot)
-        + gg.aes(**aes)
-        + gg.geom_line()
-        # + gg.geom_rug(gg.aes(x=plot_var[0]),data=self.data,inherit_aes=False)
-    )
+    plot = gg.ggplot(grid_data) + gg.aes(**aes) + gg.geom_line()
     
     if len(plot_var) >= 2:
         plot += gg.labs(color=plot_var[1],fill=plot_var[1])
     plot += gg.labs(y=y_label)
     
     # 区间估计
-    plot = _add_ci_plot(plot,data,ci_type)
+    plot = _add_ci_plot(plot,grid_data,ci_type)
     
     # 分面
     if len(plot_var) >= 3:
@@ -40,16 +35,19 @@ def plot_grid(
     if h_line is not None:
         plot += gg.geom_hline(yintercept=h_line,linetype='--')
     
-    # plot += gg.geom_rug(gg.aes(x=plot_var[0]),data=self.data,inherit_aes=False)
+    if raw_data is not None:
+        plot += gg.geom_rug(gg.aes(x=plot_var[0]),sides='b',data=raw_data.loc[:,[plot_var[0]]],inherit_aes=False)
     
     return plot
 
 def plot_all_grid(
-    data   : pd.DataFrame,
-    free_y : bool,
-    ci_type: str,
-    y_label: str,
-    color_x: str
+    grid_data: pd.DataFrame,
+    raw_data : pd.DataFrame,
+    free_y   : bool,
+    ci_type  : str,
+    y_label  : str,
+    color_x  : str,
+    h_line   : int = None,
 ):
     
     scales = 'free' if free_y else 'free_x'
@@ -61,14 +59,20 @@ def plot_all_grid(
         })
     
     plot = (
-        gg.ggplot(data=data)+
+        gg.ggplot(data=grid_data)+
         gg.aes(**aes)+
         gg.facet_wrap(facets='x_name',scales=scales)+
         gg.geom_line()
     )
     
-    plot = _add_ci_plot(plot,data,ci_type)
+    plot = _add_ci_plot(plot,grid_data,ci_type)
     plot += gg.labs(y=y_label,x='',color=color_x,fill=color_x)
+    
+    if h_line is not None:
+        plot += gg.geom_hline(yintercept=h_line,linetype='--')
+    
+    if raw_data is not None:
+        plot += gg.geom_rug(gg.aes(x='x_value'),sides='b',data=raw_data,inherit_aes=False)
     
     return plot
 
