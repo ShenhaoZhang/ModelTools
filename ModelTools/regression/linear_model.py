@@ -206,8 +206,19 @@ class LinearModel:
     def plot_coef_pair(self):
         ...
     
-    def metric(self) -> pd.DataFrame:
-        metric = Metric(y_true=self.y,y_pred=self.mod.predict(self.x)).get_metric()
+    def metric(self,new_data=None) -> pd.DataFrame:
+        
+        if new_data is None:
+            y_true      = self.y
+            y_pred      = self.mod.predict(self.x)
+            metric_type = 'Train'
+        else:
+            new_data    = self._init_data(new_data=new_data)
+            y_pred      = self._predict(new_data=new_data)
+            y_true      = new_data.loc[:,self.y_col]
+            metric_type = 'Test'
+        metric = Metric(y_true=y_true,y_pred=y_pred,y_name=metric_type).get_metric()
+        
         return metric
     
     def plot_metric(self):
