@@ -114,7 +114,7 @@ class LinearModel:
         
         return self
 
-    def bootstrap_coef(self,n_bootstrap:int=1000,re_boot:bool=False) -> pd.DataFrame:
+    def bootstrap_coef(self,n_bootstrap:int=1000,re_boot:bool=False,desc='Sampling Coef') -> pd.DataFrame:
         if n_bootstrap <= 0:
             return None
         
@@ -127,7 +127,7 @@ class LinearModel:
         mod       = clone(self.mod)
         
         coef_dist = []
-        for _ in get_progress_bar(range(n_bootstrap),self.show_progress):
+        for _ in get_progress_bar(range(n_bootstrap),self.show_progress,desc):
             sample_index = rng.choice(all_index,size=data_size,replace=True)
             sample_x     = x[sample_index,:]
             sample_y     = self.y[sample_index]
@@ -138,7 +138,7 @@ class LinearModel:
         
         return coef_dist
 
-    def bootstrap_pred(self,new_x=None,n_bootstrap=None) -> np.ndarray:
+    def bootstrap_pred(self,new_x=None,n_bootstrap=None,desc='Sampling Prediction') -> np.ndarray:
         new_x = self.x if new_x is None else new_x
         
         coef_dist       = self.coef_dist.to_numpy()
@@ -148,7 +148,7 @@ class LinearModel:
         #TODO
         mod = clone(self.mod).fit(self.x.iloc[0:10,:],self.y[0:10])
         pred_dist = []    
-        for coef in get_progress_bar(coef_dist,self.show_progress):
+        for coef in get_progress_bar(coef_dist,self.show_progress,desc):
             mod.coef_ = coef
             pred      = mod.predict(new_x)
             pred_dist.append(pred)
@@ -248,7 +248,7 @@ class LinearModel:
         data  = self._init_data(new_data,data_grid)
         x     = self._model_dataframe(data,formula=self.formula_x)
         alpha = 1 - ci_level
-        pred  = self.bootstrap_pred(x)
+        pred  = self.bootstrap_pred(x,desc='Raw')
         
         # 指定斜率对应的变量
         if data_grid is not None :
@@ -256,7 +256,9 @@ class LinearModel:
                 raise Exception('给定data_grid后，slope_var默认是第一个变量，不能人为指定')
             else:
                 slope_var = list(data_grid.keys())[0]
-        
+        if slope_var is None:
+            slope_var = data.columns.to_list()
+            
         if isinstance(slope_var,str):
             slope_var = [slope_var]
         elif not isinstance(slope_var,list):
@@ -269,7 +271,7 @@ class LinearModel:
             data_eps            = data.copy(deep=True)
             data_eps[var_name] += eps
             x_eps               = self._model_dataframe(data_eps,formula=self.formula_x)
-            pred_eps            = self.bootstrap_pred(x_eps)
+            pred_eps            = self.bootstrap_pred(x_eps,desc=var_name)
             slope_dist          = (pred_eps - pred) / eps
             
             # 基于完整数据计算的slope
@@ -317,7 +319,6 @@ class LinearModel:
         plot_x   :list               = None,
         color_by :dict               = None,
         free_y   :bool               = False,
-        ci_type  :Union[str,list]    = 'mean',
         show_rug : bool              = False,
         abline   : Union[float,list] = 0,
     ):
@@ -357,7 +358,7 @@ class LinearModel:
             grid_data = slope_grid,
             raw_data  = raw_data,
             free_y    = free_y,
-            ci_type   = ci_type,
+            ci_type   = 'mean',
             y_label   = self.y_col,
             color_x   = color_x,
             h_line    = abline
@@ -606,12 +607,13 @@ def get_p_value(sample:np.ndarray, hypothesis:float, alternative='two_side') -> 
         
     return p_value
 
-def get_progress_bar(iter,show_progress):
+def get_progress_bar(iter,show_progress,desc=None):
     if show_progress == False:
         return iter
     try:
         from tqdm import tqdm
-        iter = tqdm(iter)
+        desc = desc + '\t' if desc is not None else desc
+        iter = tqdm(iter,desc=desc)
     except:
         pass
     return iter
