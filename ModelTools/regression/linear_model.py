@@ -26,8 +26,10 @@ class LinearModel:
         formula      : str,
         data         : Union[dict,pd.DataFrame],
         show_progress: bool  = True,
-        rng_seed     : float = 0
+        rng_seed     : float = 0,
+        fml_engine   : str   = 'patsy'
     ) -> None:
+        self.fml_engine    = fml_engine
         
         self.formula       = formula
         self.formula_x     = re.findall('~(.+)',self.formula)[0]
@@ -67,17 +69,34 @@ class LinearModel:
             df   = pd.DataFrame(data=data,columns=matrix.design_info.column_names)
             return df
         
-        if '~' in formula:
-            matrices = dmatrices(formula,data)
-            # 保存训练模型时数据的design_info，用于转换新数据
-            self._matrices_design_info = matrices[1].design_info
-            y = np.asarray(matrices[0]).flatten()
-            x = matrix_to_df(matrices[1])
-            return x,y
+        if self.fml_engine == 'patsy':
+            if '~' in formula:
+                matrices = dmatrices(formula,data)
+                # 保存训练模型时数据的design_info，用于转换新数据
+                self._matrices_design_info = matrices[1].design_info
+                y = np.asarray(matrices[0]).flatten()
+                x = matrix_to_df(matrices[1])
+                return x,y
+            else:
+                matrix = build_design_matrices([self._matrices_design_info], data)[0]
+                x      = matrix_to_df(matrix)
+                return x
+        
+        elif self.fml_engine == 'formulaic':
+            from formulaic import model_matrix
+            if '~' in formula:
+                matrices = model_matrix(formula,data)
+                self._matrices_design_info = matrices.model_spec
+                y = matrices.lhs.values.flatten()
+                x = matrices.rhs
+                return x,y
+            else:
+                matrix = self._matrices_design_info.get_model_matrix(data)
+                x      = matrix.rhs
+                return x
+        
         else:
-            matrix = build_design_matrices([self._matrices_design_info], data)[0]
-            x      = matrix_to_df(matrix)
-            return x
+            raise Exception('WRONG')
     
     def fit(self,method='OLS',method_kwargs:dict=None,n_bootstrap=1000):
         
