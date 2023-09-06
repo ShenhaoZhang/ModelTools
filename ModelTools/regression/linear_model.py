@@ -68,30 +68,31 @@ class LinearModel:
             data = np.asarray(matrix)
             df   = pd.DataFrame(data=data,columns=matrix.design_info.column_names)
             return df
-        
+        # 保存训练模型时数据的design_info，用于转换新数据
         if self.fml_engine == 'patsy':
             if '~' in formula:
-                matrices = dmatrices(formula,data)
-                # 保存训练模型时数据的design_info，用于转换新数据
-                self._matrices_design_info = matrices[1].design_info
-                y = np.asarray(matrices[0]).flatten()
-                x = matrix_to_df(matrices[1])
+                matrices         = dmatrices(formula,data)
+                self._model_spec = matrices[1].design_info
+                y                = np.asarray(matrices[0]).flatten()
+                x                = matrix_to_df(matrices[1])
+                self.x_col       = [x.name() for x in self._model_spec.factor_infos.keys()]
                 return x,y
             else:
-                matrix = build_design_matrices([self._matrices_design_info], data)[0]
+                matrix = build_design_matrices([self._model_spec], data)[0]
                 x      = matrix_to_df(matrix)
                 return x
         
         elif self.fml_engine == 'formulaic':
             from formulaic import model_matrix
             if '~' in formula:
-                matrices = model_matrix(formula,data)
-                self._matrices_design_info = matrices.model_spec
-                y = matrices.lhs.values.flatten()
-                x = matrices.rhs
+                matrices         = model_matrix(formula,data)
+                self._model_spec = matrices.model_spec
+                y                = matrices.lhs.values.flatten()
+                x                = matrices.rhs
+                self.x_col       = list(self._model_spec.rhs.encoder_state.keys())
                 return x,y
             else:
-                matrix = self._matrices_design_info.get_model_matrix(data)
+                matrix = self._model_spec.get_model_matrix(data)
                 x      = matrix.rhs
                 return x
         
@@ -286,8 +287,8 @@ class LinearModel:
                 raise Exception('给定data_grid后，slope_var默认是第一个变量，不能人为指定')
             else:
                 slope_var = list(data_grid.keys())[0]
-        if slope_var is None:
-            slope_var = data.columns.to_list()
+        
+        slope_var = self.x_col if slope_var is None else slope_var
             
         if isinstance(slope_var,str):
             slope_var = [slope_var]
@@ -349,14 +350,10 @@ class LinearModel:
         plot_x   :list               = None,
         color_by :dict               = None,
         free_y   :bool               = False,
-        show_rug : bool              = False,
+        show_rug : bool              = True,
         abline   : Union[float,list] = 0,
     ):
-        if plot_x is None:
-            plot_x = self.data.drop(self.y_col,axis=1).columns
-        else:
-            plot_x = pd.Index(plot_x)
-        
+        plot_x   = self.x_col if plot_x is None else plot_x
         color_by = color_by if color_by is not None else {}
         if len(color_by) == 0:
             color_x = None
@@ -368,12 +365,12 @@ class LinearModel:
         raw_data  = []
         slope_grid = []
         for x in plot_x:
-            if x in color_by.keys():
+            if (x in color_by.keys()) or (x not in self.x_col):
                 continue
             data_grid = {x:'line',**color_by}
             slope = (
                 self.slope(data_grid=data_grid)
-                .drop(plot_x.difference(data_grid.keys()),axis=1)
+                .drop(set(plot_x).difference(data_grid.keys()),axis=1)
                 .rename({x:'x_value','term':'x_name'},axis=1)
             )
             slope_grid.append(slope)
@@ -501,12 +498,9 @@ class LinearModel:
         ci_type :Union[str,list] = 'mean',
         show_rug : bool = True,
     ):
-        if plot_x is None:
-            plot_x = self.data.drop(self.y_col,axis=1).columns
-        else:
-            plot_x = pd.Index(plot_x)
-        
+        plot_x   = self.x_col if plot_x is None else plot_x
         color_by = color_by if color_by is not None else {}
+        
         if len(color_by) == 0:
             color_x = None
         elif len(color_by) == 1:
@@ -517,12 +511,12 @@ class LinearModel:
         raw_data  = []
         pred_grid = []
         for x in plot_x:
-            if x in color_by.keys():
+            if (x in color_by.keys()) or (x not in self.x_col):
                 continue
             data_grid = {x:'line',**color_by}
             pred = (
                 self.prediction(data_grid=data_grid)
-                .drop(plot_x.difference(data_grid.keys()),axis=1)
+                .drop(set(plot_x).difference(data_grid.keys()),axis=1)
                 .rename({x:'x_value'},axis=1)
                 .assign(x_name=x)
             )
