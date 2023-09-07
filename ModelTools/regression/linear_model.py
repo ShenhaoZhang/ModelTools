@@ -35,6 +35,7 @@ class LinearModel:
         self.formula_x     = re.findall('~(.+)',self.formula)[0]
         self.y_col         = re.findall('(.+)~',self.formula)[0]
         self.data          = self._init_data(new_data=data) 
+        self.x_col         = [x for x in self.data.columns if x in self.formula_x]
         self.x,self.y      = self._model_dataframe(data=self.data,formula=self.formula)
         self.mod           = None
         self.coef_dist     = None
@@ -75,7 +76,6 @@ class LinearModel:
                 self._model_spec = matrices[1].design_info
                 y                = np.asarray(matrices[0]).flatten()
                 x                = matrix_to_df(matrices[1])
-                self.x_col       = [x.name() for x in self._model_spec.factor_infos.keys()]
                 return x,y
             else:
                 matrix = build_design_matrices([self._model_spec], data)[0]
@@ -89,7 +89,6 @@ class LinearModel:
                 self._model_spec = matrices.model_spec
                 y                = matrices.lhs.values.flatten()
                 x                = matrices.rhs
-                self.x_col       = list(self._model_spec.rhs.encoder_state.keys())
                 return x,y
             else:
                 matrix = self._model_spec.get_model_matrix(data)
