@@ -91,8 +91,8 @@ class LinearModel:
                 x                = matrices.rhs
                 return x,y
             else:
-                matrix = self._model_spec.get_model_matrix(data)
-                x      = matrix.rhs
+                matrix = self._model_spec.rhs.get_model_matrix(data)
+                x      = matrix
                 return x
         
         else:
