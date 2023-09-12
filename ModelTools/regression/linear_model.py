@@ -52,7 +52,7 @@ class LinearModel:
             data = self.data
         
         elif new_data is None and data_grid is not None:
-            data  = DataGrid(self.data.drop(self.y_col,axis=1)).get_grid(**data_grid)
+            data  = DataGrid(self.data.loc[:,self.x_col]).get_grid(**data_grid)
         
         elif new_data is not None and data_grid is None:
             if isinstance(new_data,pd.DataFrame):
