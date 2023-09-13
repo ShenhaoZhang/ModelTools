@@ -59,6 +59,10 @@ class LinearModel:
                 data = new_data.reset_index(drop=True)
             elif isinstance(new_data,(dict,list,tuple)) :
                 data = pd.DataFrame(new_data)
+        
+        if data.isna().any().any():
+            print('【警告】数据中存在缺失值,已剔除')
+            data = data.dropna()
             
         return data
         
