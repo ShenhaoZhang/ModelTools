@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import StandardScaler
 from patsy import dmatrices,build_design_matrices
 
 from ..utils.data_grid import DataGrid
@@ -73,6 +74,7 @@ class LinearModel:
             data = np.asarray(matrix)
             df   = pd.DataFrame(data=data,columns=matrix.design_info.column_names)
             return df
+        
         # 保存训练模型时数据的design_info，用于转换新数据
         if self.fml_engine == 'patsy':
             if '~' in formula:
@@ -104,14 +106,11 @@ class LinearModel:
     
     def fit(self,method='OLS',method_kwargs:dict=None,n_bootstrap=1000):
         
-        # 模型默认参数
-        mod_default_param = _default_param.get(method,{})
-        # 模型指定参数
-        method_kwargs = {} if method_kwargs is None else method_kwargs
-        # 合并参数
-        mod_default_param.update(method_kwargs)
-                
+        mod_default_param = _default_param.get(method,{})                  # 模型默认参数
+        method_kwargs     = {} if method_kwargs is None else method_kwargs # 模型指定参数
+        mod_default_param.update(method_kwargs)                            # 合并参数
         mod = _linear_model[method](fit_intercept=False,**mod_default_param)
+        
         if method in _cv_param_grid.keys():
             
             # 从待交叉验证的参数中移除已指定的参数
@@ -126,7 +125,8 @@ class LinearModel:
                 param_grid = cv_param_grid,
                 n_jobs     = -1,
                 refit      = True,
-                cv         = 5
+                cv         = 5,
+                scoring    = 'neg_mean_absolute_error'
             )
             self.mod = cv.fit(X=self.x,y=self.y).best_estimator_
         else:
