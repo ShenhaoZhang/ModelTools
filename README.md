@@ -15,6 +15,7 @@
 
 # 模型检查
 
+1. check
 1. plot_check
 
 # 模型评价

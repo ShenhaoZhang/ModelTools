@@ -257,6 +257,9 @@ class LinearModel:
             tabulate(metric_info,headers='keys')
         )
     
+    def check(self):
+        return
+    
     def plot_check(self,ppc_n_resample=50):
         rng       = np.random.default_rng(self.rng_seed)
         pred      = self._predict(new_data=self.data)
