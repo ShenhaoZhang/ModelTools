@@ -1,7 +1,7 @@
 import pandas as pd
 import plotnine as gg 
 
-def plot_grid(
+def plot_grid_1d(
     grid_data: pd.DataFrame,
     raw_data : pd.DataFrame,
     plot_var : list,
@@ -40,7 +40,7 @@ def plot_grid(
     
     return plot
 
-def plot_all_grid(
+def plot_all_grid_1d(
     grid_data: pd.DataFrame,
     raw_data : pd.DataFrame,
     free_y   : bool,
@@ -76,6 +76,34 @@ def plot_all_grid(
     
     return plot
 
+def plot_grid_2d(
+    grid_data: pd.DataFrame,
+    plot_var : list,
+    y_label  : str = 'y',
+):
+    if len(plot_var)>4:
+        raise Exception('WRONG')
+    
+    aes = {'x':plot_var[0],'y':plot_var[1],'fill':'mean'}
+    
+    plot = (
+        gg.ggplot(grid_data) 
+        + gg.aes(**aes) 
+        + gg.geom_tile()
+        + gg.coord_cartesian(expand=False)
+        + gg.labs(fill=y_label)
+    )
+    
+    if grid_data.loc[:,plot_var[0:2]].shape[0] <= 100:
+        plot += gg.geom_text(gg.aes(label='round(mean,1)'))
+    
+    # 分面
+    if len(plot_var) >= 3:
+        facets = f'.~{plot_var[2]}' if len(plot_var) == 3 else plot_var[2:4]
+        facet_grid = gg.facet_grid(facets=facets,labeller='label_both')
+        plot += facet_grid
+        
+    return plot
 
 def _add_ci_plot(plot,data,ci_type):
     # 区间估计
@@ -87,3 +115,4 @@ def _add_ci_plot(plot,data,ci_type):
             continue
         plot += gg.geom_ribbon(gg.aes(ymin=ci_lower,ymax=ci_upper),alpha=0.3,outline_type=None)
     return plot
+

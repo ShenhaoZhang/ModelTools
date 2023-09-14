@@ -5,14 +5,13 @@ import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import StandardScaler
 from patsy import dmatrices,build_design_matrices
 
 from ..utils.data_grid import DataGrid
 from .._src.tabulate import tabulate
 from .metric import Metric
 from .plot.distribution import plot_distribution
-from .plot.grid import plot_grid,plot_all_grid
+from .plot.grid import plot_grid_1d,plot_all_grid_1d,plot_grid_2d
 from .plot.check_model import plot_check_model
 from .model_config import (
     _linear_model,
@@ -102,7 +101,7 @@ class LinearModel:
                 return x
         
         else:
-            raise Exception('WRONG')
+            raise Exception('fml_engine参数只能是patsy或formulaic')
     
     def fit(self,method='OLS',method_kwargs:dict=None,n_bootstrap=1000):
         
@@ -341,7 +340,7 @@ class LinearModel:
         slope = self.slope(**slope_kwargs)
         raw_data = self.data if show_rug else None
         
-        plot = plot_grid(
+        plot = plot_grid_1d(
             grid_data = slope,
             raw_data  = raw_data,
             plot_var  = list(data_grid.keys()),
@@ -387,7 +386,7 @@ class LinearModel:
         slope_grid = pd.concat(slope_grid,axis=0)
         raw_data   = pd.concat(raw_data,axis=0) if show_rug else None
         
-        plot = plot_all_grid(
+        plot = plot_all_grid_1d(
             grid_data = slope_grid,
             raw_data  = raw_data,
             free_y    = free_y,
@@ -476,6 +475,7 @@ class LinearModel:
     def plot_prediction(
         self,
         data_grid: dict,
+        plot_type: str = '1d',
         ci_type  : Union[str,list] = 'mean',
         show_rug : bool = True,
         **predict_kwargs
@@ -486,13 +486,23 @@ class LinearModel:
         prediction = self.prediction(**predict_kwargs)
         plot_var   = list(predict_kwargs['data_grid'].keys())
         raw_data   = self.data if show_rug else None
-        plot       = plot_grid(
-            grid_data = prediction,
-            raw_data  = raw_data,
-            plot_var  = plot_var,
-            ci_type   = ci_type,
-            y_label   = self.y_col
-        )
+        
+        if plot_type == '1d':
+            plot = plot_grid_1d(
+                grid_data = prediction,
+                raw_data  = raw_data,
+                plot_var  = plot_var,
+                ci_type   = ci_type,
+                y_label   = self.y_col
+            )
+        elif plot_type == '2d':
+            plot = plot_grid_2d(
+                grid_data = prediction,
+                plot_var  = plot_var,
+                y_label   = self.y_col
+            )
+        else:
+            raise Exception('plot_type参数只能是1d或2d')
 
         return plot
     
@@ -534,7 +544,7 @@ class LinearModel:
         pred_grid = pd.concat(pred_grid,axis=0)
         raw_data  = pd.concat(raw_data,axis=0) if show_rug else None
         
-        plot = plot_all_grid(
+        plot = plot_all_grid_1d(
             grid_data = pred_grid,
             raw_data  = raw_data,
             free_y    = free_y,
