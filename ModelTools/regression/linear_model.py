@@ -96,6 +96,7 @@ class LinearModel:
                 x                = matrices.rhs
                 return x,y
             else:
+                #TODO formulaic在处理样条时有bug
                 matrix = self._model_spec.rhs.get_model_matrix(data)
                 x      = matrix
                 return x
@@ -282,6 +283,12 @@ class LinearModel:
     ) -> pd.DataFrame:
 
         data  = self._init_data(new_data,data_grid)
+        
+        # 当用原数据计算slope时，若使用样条特征会出现外推的问题，因此筛选数据，避免外推
+        #TODO 需要优化
+        if data_grid is None:
+            data = data.loc[data.apply(lambda sr:(sr-sr.max()).abs()>eps).all(axis=1),:]
+        
         x     = self._model_dataframe(data,formula=self.formula_x)
         alpha = 1 - ci_level
         pred  = self.bootstrap_pred(x,desc='Raw')
@@ -321,7 +328,8 @@ class LinearModel:
                     'mean_se'      : slope_dist.std(axis=0),
                     'mean_ci_lower': np.quantile(slope_dist,alpha/2,axis=0),
                     'mean_ci_upper': np.quantile(slope_dist,1-alpha/2,axis=0),
-                }
+                },
+                index = data.index
             )
             slope_result = pd.concat([slope_result,data],axis=1)
             result_data.append(slope_result)
