@@ -62,7 +62,7 @@ class LinearModel:
         
         if data.isna().any().any():
             print('【警告】数据中存在缺失值,已剔除')
-            data = data.dropna()
+            data = data.dropna().reset_index(drop=True)
             
         return data
         
@@ -257,10 +257,7 @@ class LinearModel:
             tabulate(metric_info,headers='keys')
         )
     
-    def check(self):
-        return
-    
-    def plot_check(self,ppc_n_resample=50):
+    def check(self,ppc_n_resample=50):
         rng       = np.random.default_rng(self.rng_seed)
         pred      = self._predict(new_data=self.data)
         boot_pred = self.bootstrap_pred(n_bootstrap=ppc_n_resample)
@@ -272,6 +269,24 @@ class LinearModel:
             y_name       = self.y_col
         )
         return plot
+    
+    def check_resid_heterogeneity(self):
+        import plotnine as gg
+        plot = (
+            self.prediction(ci_method=None)
+            .assign(resid = np.abs(self.fit_resid))
+            .melt(
+                id_vars='resid',
+                value_vars=self.x_col + ['mean']
+            )
+            .rename(columns={'mean':'fitted'})
+            .pipe(gg.ggplot)
+            + gg.aes(x='value',y='resid')
+            + gg.geom_point(alpha=0.3)
+            + gg.facet_wrap(facets='variable',scales='free_x')
+            + gg.geom_smooth(method='lowess',color='red',se=False)
+        )
+        return plot 
     
     def slope(
         self,

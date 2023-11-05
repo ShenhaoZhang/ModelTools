@@ -16,7 +16,7 @@
 # 模型检查
 
 1. check
-1. plot_check
+1. check_resid_heterogeneity
 
 # 模型评价
 
@@ -30,7 +30,7 @@
 1. compare_slope
 
 1. prediction
-1. plot_prediction
+1. plot_prediction(1d/2d)
 1. plot_all_prediction
 1. compare_prediction
 
