@@ -10,10 +10,10 @@ import pandas as pd
 from sklearn.base import clone
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-from tabulate import tabulate
+from ..._src.tabulate import tabulate
 
-from ...data.data import Data
-from ...explain.model_agnostic import MaExplain
+# from ...data.data import Data
+# from ...explain.model_agnostic import MaExplain
 from ...tools.novelty import Novelty
 from ...plot.corr_scatter import corr_scatter
 

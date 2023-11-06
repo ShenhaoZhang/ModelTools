@@ -4,7 +4,7 @@ from typing import Union
 import numpy as np
 import pandas as pd 
 from scipy import stats
-from tabulate import tabulate
+from .._src.tabulate import tabulate
 
 class DataExplorer:
     
