@@ -63,7 +63,8 @@ class LinearModel:
         if data.isna().any().any():
             print('【警告】数据中存在缺失值,已剔除')
             data = data.dropna().reset_index(drop=True)
-            
+            #TODO 考虑对各种情况下的数据reindex
+        
         return data
         
         
@@ -274,14 +275,14 @@ class LinearModel:
         import plotnine as gg
         plot = (
             self.prediction(ci_method=None)
-            .assign(resid = np.abs(self.fit_resid))
+            .assign(Resid = np.abs(self.fit_resid))
+            .rename(columns={'mean':'Fitted'})
             .melt(
-                id_vars='resid',
-                value_vars=self.x_col + ['mean']
+                id_vars='Resid',
+                value_vars=self.x_col + ['Fitted']
             )
-            .rename(columns={'mean':'fitted'})
             .pipe(gg.ggplot)
-            + gg.aes(x='value',y='resid')
+            + gg.aes(x='value',y='Resid')
             + gg.geom_point(alpha=0.3)
             + gg.facet_wrap(facets='variable',scales='free_x')
             + gg.geom_smooth(method='lowess',color='red',se=False)
