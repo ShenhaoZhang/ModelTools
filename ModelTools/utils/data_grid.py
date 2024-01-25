@@ -8,12 +8,12 @@ class DataGrid:
     def __init__(self,data:pd.DataFrame) -> None:
         self.data = data
         self.var_data = []
-        self.detect_type()
+        self._detect_type()
     
-    def detect_type(self) -> dict:
+    def _detect_type(self) -> dict:
         self.var_type = self.data.dtypes.astype('str').str.replace(pat='\d+',repl='',regex=True).to_dict()
     
-    def process_by_type(self,var_name) -> pd.DataFrame:
+    def _process_by_type(self,var_name) -> pd.DataFrame:
         type_method={
             'int'   : lambda x: np.mean(x).round(0),
             'float' : np.mean,
@@ -24,7 +24,7 @@ class DataGrid:
         result = pd.DataFrame({var_name:[var_method(self.data[var_name])]})
         return result
     
-    def process_by_shortcut(self,var_name,var_method) -> pd.DataFrame:
+    def _process_by_shortcut(self,var_name,var_method) -> pd.DataFrame:
         var_value = self.data.loc[:,var_name].to_numpy()
         
         if 'line' in var_method:
@@ -42,6 +42,9 @@ class DataGrid:
         
         elif var_method == 'quantile':
             result = np.quantile(var_value,q=[0.25,0.5,0.75])
+        
+        elif var_method == 'quantile5':
+            result = np.quantile(var_value,q=[0,0.25,0.5,0.75,1])
         
         elif var_method == 'meansd':
             mean   = np.mean(var_value)
@@ -84,7 +87,7 @@ class DataGrid:
             
             # 指定字符 函数快捷方式 std minmax quantile
             elif isinstance(var_method,str):
-                var_result = self.process_by_shortcut(var_name,var_method)
+                var_result = self._process_by_shortcut(var_name,var_method)
                 self.var_data.append(var_result)
             
             else:
@@ -96,7 +99,7 @@ class DataGrid:
         for var_name in self.data.columns:
             if var_name in finish_var:
                 continue
-            self.var_data.append(self.process_by_type(var_name))
+            self.var_data.append(self._process_by_type(var_name))
             
         self.var_data = map(lambda df:df.assign(__key__=1),self.var_data)
         grid = reduce(lambda x,y:pd.merge(x,y,on='__key__'),self.var_data).drop('__key__',axis=1)
@@ -115,10 +118,9 @@ if __name__ == '__main__':
     data = pd.DataFrame({
         'a':[1,2,3],
         'b':[0.3,0.2,0.1],
-        'c':['x','y','z']
+        'c':['x','y','z'],
     })
     dg = DataGrid(data)
-    print(dg.detect_type())
     print(dg.get_grid(a=[1,2,3],c=['x'],b='minmax'))
     
     

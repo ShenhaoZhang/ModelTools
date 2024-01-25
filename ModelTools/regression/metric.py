@@ -5,6 +5,12 @@ import pandas as pd
 from scipy import stats
 from sklearn import metrics
 
+try:
+    import lets_plot as gg 
+    gg.LetsPlot.setup_html()
+except:
+    pass
+
 class Metric:
     """
     预测效果的评估指标
@@ -37,7 +43,7 @@ class Metric:
         self.y_name     = y_name
         self.index      = index
         self.index_freq = index_freq
-        self.init_input()
+        self._init_input()
         
         self.resid = {}
         for pred_name,pred_value in self.y_pred.items():
@@ -45,9 +51,9 @@ class Metric:
             self.resid[resid_name] = self.y_true - pred_value
         
         self.data = None
-        self.init_data()
+        self._init_data()
     
-    def init_input(self):
+    def _init_input(self):
         # 真实值与预测值的的长度校验
         for pred in self.y_pred.values():
             if len(pred) != len(self.y_true):
@@ -72,7 +78,7 @@ class Metric:
             self.index_name = 'sample_order'
             self.index      = np.arange(self.sample_n)
         
-    def init_data(self):
+    def _init_data(self):
         
         true_df  = pd.DataFrame(data = {self.y_name:self.y_true},index=self.index)
         pred_df  = pd.DataFrame(self.y_pred)
@@ -114,39 +120,58 @@ class Metric:
     
     def get_metric(
         self,
-        type            = 'eval',
+        metric          = ['R2','MAE','MAPE','Mean','Std','Skew','Kurt'],
         style_metric    = False,
         style_threshold = 0.8,
     ) -> pd.DataFrame:
         
-        if type == 'eval':
-            pred = self.y_pred.values()
-            metric_dict = {}
-            metric_dict['R2']   = lambda y_pred : metrics.r2_score(self.y_true,y_pred)
-            metric_dict['MSE']  = lambda y_pred : metrics.mean_squared_error(self.y_true,y_pred)
-            metric_dict['MAE']  = lambda y_pred : metrics.mean_absolute_error(self.y_true,y_pred)
-            metric_dict['MBE']  = lambda y_pred : np.mean(y_pred - self.y_true)
-            metric_dict['MdAE'] = lambda y_pred : metrics.median_absolute_error(self.y_true,y_pred)
-            metric_dict['MAPE'] = lambda y_pred : metrics.mean_absolute_percentage_error(self.y_true,y_pred)
-            metric_dict['MaxE'] = lambda y_pred : metrics.max_error(self.y_true,y_pred)
-            metric_dict['SAE']  = lambda y_pred : np.std(np.abs(y_pred - self.y_true))
-            metric_dict['SAPE'] = lambda y_pred : np.std(np.abs((y_pred - self.y_true) / self.y_true))
-            metric_dict = {name:list(map(func,pred)) for name,func in metric_dict.items()}
+        metric_dict  = {}
+        y_pred :list = self.y_pred.values()
+        y_resid:list = self.resid.values()
+        
+        for metric_name in metric:
+            if metric_name == 'R2':
+                metric_dict[metric_name] = [metrics.r2_score(self.y_true,pred) for pred in y_pred]
+            elif metric_name == 'MSE':
+                metric_dict[metric_name] = [metrics.mean_squared_error(self.y_true,pred) for pred in y_pred]
+            elif metric_name == 'MAE':
+                metric_dict[metric_name] = [metrics.mean_absolute_error(self.y_true,pred) for pred in y_pred]
+            elif metric_name == 'MAPE':
+                metric_dict[metric_name] = [metrics.mean_absolute_percentage_error(self.y_true,pred) for pred in y_pred]
+            elif metric_name == 'Mean':
+                metric_dict[metric_name] = [np.mean(resid) for resid in y_resid]
+            elif metric_name == 'Std':
+                metric_dict[metric_name] = [np.std(resid) for resid in y_resid]
+            elif metric_name == 'Skew':
+                metric_dict[metric_name] = [stats.skew(resid) for resid in y_resid]
+            elif metric_name == 'Kurt':
+                metric_dict[metric_name] = [stats.kurtosis(resid) for resid in y_resid]
+            else:
+                raise Exception(f'{metric_name} not support')
+        
+        # if type == 'eval':
+        #     pred = self.y_pred.values()
+        #     metric_dict = {}
+        #     metric_dict['R2']   = lambda y_pred : metrics.r2_score(self.y_true,y_pred)
+        #     metric_dict['MSE']  = lambda y_pred : metrics.mean_squared_error(self.y_true,y_pred)
+        #     metric_dict['MAE']  = lambda y_pred : metrics.mean_absolute_error(self.y_true,y_pred)
+        #     metric_dict['MBE']  = lambda y_pred : np.mean(y_pred - self.y_true)
+        #     metric_dict['MdAE'] = lambda y_pred : metrics.median_absolute_error(self.y_true,y_pred)
+        #     metric_dict['MAPE'] = lambda y_pred : metrics.mean_absolute_percentage_error(self.y_true,y_pred)
+        #     metric_dict['MaxE'] = lambda y_pred : metrics.max_error(self.y_true,y_pred)
+        #     metric_dict['SAE']  = lambda y_pred : np.std(np.abs(y_pred - self.y_true))
+        #     metric_dict['SAPE'] = lambda y_pred : np.std(np.abs((y_pred - self.y_true) / self.y_true))
+        #     metric_dict = {name:list(map(func,pred)) for name,func in metric_dict.items()}
             
-        elif type == 'resid':
-            #TODO 增加ACF特征
-            resid = self.resid.values()
-            metric_dict = {}
-            metric_dict['Mean']   = np.mean
-            metric_dict['Median'] = np.median
-            metric_dict['SD']     = np.std
-            metric_dict['IQR']    = lambda resid : np.quantile(resid,q=0.75) - np.quantile(resid,q=0.25)
-            metric_dict['Skew']   = stats.skew
-            metric_dict['Kurt']   = stats.kurtosis
-            metric_dict = {name:list(map(func,resid)) for name,func in metric_dict.items()}
+        # elif type == 'resid':
+        #     resid = self.resid.values()
+        #     metric_dict = {}
+        #     metric_dict['Median'] = np.median
+        #     metric_dict['IQR']    = lambda resid : np.quantile(resid,q=0.75) - np.quantile(resid,q=0.25)
+        #     metric_dict = {name:list(map(func,resid)) for name,func in metric_dict.items()}
             
-        else:
-            raise TypeError('WRONG')
+        # else:
+        #     raise TypeError('WRONG')
         
         metric = pd.DataFrame(
             data  = metric_dict,
@@ -180,9 +205,78 @@ class Metric:
             return style
         metric = metric.style.apply(lambda sr:style(sr))
         return metric
+    
+    def plot_TVP(self, error = 0.1, error_type = 'pct', type='scatter'):
+            
+        if type == 'scatter':
+            
+            if error_type=='pct':
+                slope_up = 1 + error
+                slope_lw = 1 - error
+                inter_up,inter_lw = 0,0
+                
+            elif error_type == 'abs':
+                slope_up,slope_lw = 1,1
+                inter_up = error
+                inter_lw = -error
+                
+            plot = (
+                gg.ggplot(data=self.data)
+                + gg.aes(x=self.y_name,y='pred')
+                + gg.geom_point()
+                + gg.geom_abline(slope=1,intercept=0,color='red')
+                + gg.geom_abline(slope=slope_up,intercept=inter_up,color='red',linetype=2)
+                + gg.geom_abline(slope=slope_lw,intercept=inter_lw,color='red',linetype=2)
+                + gg.facet_wrap(facets='Method')
+                + gg.theme_grey()
+            )
+        
+        elif type == 'index':
+            
+            plot = (
+                gg.ggplot(self.data.reset_index())
+                + gg.aes(x='index')
+                + gg.geom_line(gg.aes(y=self.y_name),color='red')
+                + gg.geom_line(gg.aes(y='pred'))
+                + gg.facet_wrap(facets='Method')
+                + gg.theme_grey()
+            )
+            
+        return plot
+    
+    def plot_resid(self,type='index'):
+        plot_data = (
+            self.data
+            .reset_index()
+            .assign(abs_resid = lambda dt:dt.resid**2) #TODO student残差
+        )
+        
+        if type == 'index':
+            plot = (
+                gg.ggplot(data=plot_data)
+                + gg.aes(x='index',y='abs_resid')
+                + gg.geom_line()
+                + gg.facet_wrap(facets='Method')
+                + gg.theme_grey()
+            )
+        
+        elif type == 'qq':
+            plot = (
+                gg.ggplot(data=plot_data)
+                + gg.aes(sample='resid')
+                + gg.geom_qq()
+                + gg.geom_qq_line()
+                + gg.facet_wrap(facets='Method')
+                + gg.theme_grey()
+            )
+        
+        return plot
+
+
 
 if __name__ == '__main__':
     y_ture = np.random.normal(size=100)
     y_pred = np.random.normal(loc=y_ture,scale=0.2)
-    metric = Metric(y_ture,y_pred,y_name='abc')
+    metric = Metric(y_ture,[y_pred,y_pred*2],y_name='y_input')
+    print(metric.data.reset_index())
     print(metric.get_metric())

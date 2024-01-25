@@ -10,9 +10,7 @@ from patsy import dmatrices,build_design_matrices
 from ..utils.data_grid import DataGrid
 from .._src.tabulate import tabulate
 from .metric import Metric
-from .plot.distribution import plot_distribution
 from .plot.grid import plot_grid_1d,plot_all_grid_1d,plot_grid_2d
-from .plot.check_model import plot_check_model
 from .model_config import (
     _linear_model,
     _default_param,
@@ -220,34 +218,34 @@ class LinearModel:
             
         return coef
     
-    def plot_coef_dist(self,**plot_kwargs):
-        plot = plot_distribution(
-            data = self.coef_dist,
-            **plot_kwargs
-        )
-        return plot
-    
-    def plot_coef_pair(self):
-        ...
-    
     def metric(self,new_data=None) -> pd.DataFrame:
         
-        if new_data is None:
-            y_true      = self.y
-            y_pred      = self.mod.predict(self.x)
-            metric_type = 'Train'
+        train_y_pred = self.mod.predict(self.x) 
+        metric = Metric(y_true=self.y,y_pred=train_y_pred,y_name='Train').get_metric()
+        
+        if isinstance(new_data,pd.DataFrame):
+            new_data = [new_data]
         else:
-            new_data    = self._init_data(new_data=new_data)
-            y_pred      = self._predict(new_data=new_data)
-            y_true      = new_data.loc[:,self.y_col]
-            metric_type = 'Test'
-        metric = Metric(y_true=y_true,y_pred=y_pred,y_name=metric_type).get_metric()
+            new_data = []
+            
+        for idx,data in enumerate(new_data):
+            test_data   = data.loc[:,self.x_col]
+            test_pred   = self._predict(new_data=test_data)
+            test_true   = data.loc[:,self.y_col]
+            metric_test = Metric(y_true=test_true,y_pred=test_pred,y_name=f'Test_{idx}').get_metric()
+            
+            metric = pd.concat([metric,metric_test],axis=0)
         
         return metric
     
     def plot_metric(self):
-        ...
-        
+        metric = Metric(
+            y_true=self.y,
+            y_pred=self.mod.predict(self.x),
+            y_name=self.y_col
+        )
+        return metric
+    
     def summary(self):
         coef_info   = self.coef()
         metric_info = self.metric()
@@ -257,19 +255,6 @@ class LinearModel:
         print(
             tabulate(metric_info,headers='keys')
         )
-    
-    def check(self,ppc_n_resample=50):
-        rng       = np.random.default_rng(self.rng_seed)
-        pred      = self._predict(new_data=self.data)
-        boot_pred = self.bootstrap_pred(n_bootstrap=ppc_n_resample)
-        boot_pred += rng.choice(self.fit_resid,size=boot_pred.shape,replace=True)
-        plot = plot_check_model(
-            residual     = self.fit_resid,
-            fitted_value = pred,
-            boot_pred    = boot_pred,
-            y_name       = self.y_col
-        )
-        return plot
     
     def check_resid_heterogeneity(self):
         import plotnine as gg
@@ -461,7 +446,7 @@ class LinearModel:
             raise Exception('WRONG')
         
         if new_data is not None:
-            new_x     = self._model_dataframe(new_data,formula=self.formula_x)
+            new_x = self._model_dataframe(new_data,formula=self.formula_x)
         pred = self.mod.predict(new_x).flatten()
         
         return pred
