@@ -238,6 +238,7 @@ class LinearModel:
         
         return metric
     
+    @property
     def plot_metric(self):
         metric = Metric(
             y_true=self.y,

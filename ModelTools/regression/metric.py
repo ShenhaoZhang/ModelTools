@@ -120,7 +120,7 @@ class Metric:
     
     def get_metric(
         self,
-        metric          = ['R2','MAE','MAPE','Mean','Std','Skew','Kurt'],
+        metric          = ['R2','MAE','MAPE','Mean','Std','Skew','Kurt','Median','IQR'],
         style_metric    = False,
         style_threshold = 0.8,
     ) -> pd.DataFrame:
@@ -146,32 +146,12 @@ class Metric:
                 metric_dict[metric_name] = [stats.skew(resid) for resid in y_resid]
             elif metric_name == 'Kurt':
                 metric_dict[metric_name] = [stats.kurtosis(resid) for resid in y_resid]
+            elif metric_name == 'Median':
+                metric_dict[metric_name] = [np.median(resid) for resid in y_resid]
+            elif metric_name == 'IQR':
+                metric_dict[metric_name] = [stats.iqr(resid) for resid in y_resid]
             else:
                 raise Exception(f'{metric_name} not support')
-        
-        # if type == 'eval':
-        #     pred = self.y_pred.values()
-        #     metric_dict = {}
-        #     metric_dict['R2']   = lambda y_pred : metrics.r2_score(self.y_true,y_pred)
-        #     metric_dict['MSE']  = lambda y_pred : metrics.mean_squared_error(self.y_true,y_pred)
-        #     metric_dict['MAE']  = lambda y_pred : metrics.mean_absolute_error(self.y_true,y_pred)
-        #     metric_dict['MBE']  = lambda y_pred : np.mean(y_pred - self.y_true)
-        #     metric_dict['MdAE'] = lambda y_pred : metrics.median_absolute_error(self.y_true,y_pred)
-        #     metric_dict['MAPE'] = lambda y_pred : metrics.mean_absolute_percentage_error(self.y_true,y_pred)
-        #     metric_dict['MaxE'] = lambda y_pred : metrics.max_error(self.y_true,y_pred)
-        #     metric_dict['SAE']  = lambda y_pred : np.std(np.abs(y_pred - self.y_true))
-        #     metric_dict['SAPE'] = lambda y_pred : np.std(np.abs((y_pred - self.y_true) / self.y_true))
-        #     metric_dict = {name:list(map(func,pred)) for name,func in metric_dict.items()}
-            
-        # elif type == 'resid':
-        #     resid = self.resid.values()
-        #     metric_dict = {}
-        #     metric_dict['Median'] = np.median
-        #     metric_dict['IQR']    = lambda resid : np.quantile(resid,q=0.75) - np.quantile(resid,q=0.25)
-        #     metric_dict = {name:list(map(func,resid)) for name,func in metric_dict.items()}
-            
-        # else:
-        #     raise TypeError('WRONG')
         
         metric = pd.DataFrame(
             data  = metric_dict,
@@ -244,19 +224,35 @@ class Metric:
             
         return plot
     
-    def plot_resid(self,type='index'):
+    def plot_resid(self,type='index',var:pd.DataFrame=None):
         plot_data = (
             self.data
             .reset_index()
-            .assign(abs_resid = lambda dt:dt.resid**2) #TODO student残差
+            .assign(abs_std_resid = lambda dt:np.abs(dt.resid/dt.resid.std())) 
         )
         
         if type == 'index':
             plot = (
                 gg.ggplot(data=plot_data)
-                + gg.aes(x='index',y='abs_resid')
+                + gg.aes(x='index',y='abs_std_resid')
                 + gg.geom_line()
                 + gg.facet_wrap(facets='Method')
+                + gg.theme_grey()
+            )
+        
+        elif type == 'var':
+            if not isinstance(var,pd.DataFrame):
+                raise Exception('WRONG')
+            
+            plot_data = pd.concat([plot_data,var],axis=1)
+            var_col   = var.columns.to_list()
+            plot = (
+                plot_data
+                .melt(id_vars=['abs_std_resid'],value_vars=var_col,var_name='var',value_name='value')
+                .pipe(gg.ggplot)
+                + gg.aes(x='value',y='abs_std_resid')
+                + gg.geom_point()
+                + gg.facet_wrap(facets='var',scales='free_x')
                 + gg.theme_grey()
             )
         
