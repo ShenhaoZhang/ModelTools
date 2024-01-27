@@ -71,12 +71,6 @@ class ModelVal:
         self.metric_index = self._get_metric_by_split(split_idx=split_idx)
         return self
 
-    def val_by_x(self,x_name,start:Union[int,float],step:int,aesc=True,min_test_sample=30):
-        ...
-    
-    def val_by_sim_x(self):
-        ...
-
     def plot_metric(self,type='index',metric=['MAE','MAPE'],log_metric=False):
         if type == 'index':
             metric_data = self.metric_index
