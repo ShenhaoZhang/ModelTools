@@ -238,12 +238,18 @@ class LinearModel:
         
         return metric
     
-    @property
-    def plot_metric(self):
+    def plot_metric(self,new_data:pd.DataFrame=None)->Metric:
+        if new_data is None:
+            y_true = self.y 
+            y_pred = self._predict(new_x=self.x)
+        else:
+            y_true = new_data.loc[:,self.y_col]
+            y_pred = self._predict(new_data=new_data)
+        
         metric = Metric(
-            y_true=self.y,
-            y_pred=self.mod.predict(self.x),
-            y_name=self.y_col
+            y_true = y_true,
+            y_pred = y_pred,
+            y_name = self.y_col
         )
         return metric
     
@@ -416,7 +422,8 @@ class LinearModel:
         new_data  : pd.DataFrame  = None,
         data_grid : dict          = None,
         ci_level  : float         = 0.95,
-        ci_method : str           = 'bootstrap'
+        ci_method : str           = 'bootstrap',
+        y_FUN     : callable      = None
     ) -> pd.DataFrame:
         
         self._check_fitted()
@@ -424,10 +431,11 @@ class LinearModel:
         new_x = self._model_dataframe(data,formula=self.formula_x)
         
         # 点预测
-        pred = self.mod.predict(new_x).flatten()
+        pred = self._predict(new_x=new_x,y_FUN=y_FUN)
+        
         # 区间预测
         if (ci_method is not None) and (self.coef_dist is not None):
-            interval = self._predict_interval(new_x,ci_level=ci_level,method=ci_method)
+            interval = self._predict_interval(new_x,ci_level=ci_level,method=ci_method,y_FUN=y_FUN)
         else:
             interval = None
         
@@ -440,7 +448,7 @@ class LinearModel:
         
         return predictions
     
-    def _predict(self, new_data=None, new_x=None) -> np.ndarray:
+    def _predict(self, new_data=None, new_x=None,y_FUN:callable=None) -> np.ndarray:
         self._check_fitted()
         
         if new_data is None and new_x is None:
@@ -449,10 +457,11 @@ class LinearModel:
         if new_data is not None:
             new_x = self._model_dataframe(new_data,formula=self.formula_x)
         pred = self.mod.predict(new_x).flatten()
+        pred = y_FUN(pred) if y_FUN is not None else pred
         
         return pred
     
-    def _predict_interval(self,new_x,method,ci_level) -> pd.DataFrame:
+    def _predict_interval(self,new_x,method,ci_level,y_FUN:callable=None) -> pd.DataFrame:
         alpha = 1-ci_level
         if method == 'conformal':
             from mapie.regression import MapieRegressor
@@ -464,6 +473,7 @@ class LinearModel:
         
         elif method == 'bootstrap':
             pred_dist = self.bootstrap_pred(new_x)
+            pred_dist = y_FUN(pred_dist) if y_FUN is not None else pred_dist
             mean_se   = np.std(pred_dist,axis=0)
             mean_ci_lower ,mean_ci_upper  = np.quantile(pred_dist,[alpha/2,1-alpha/2],axis=0)
             resid_low, resid_up = np.quantile(self.fit_resid,[alpha/2,1-alpha/2])
@@ -488,14 +498,20 @@ class LinearModel:
         plot_type: str = '1d',
         ci_type  : Union[str,list] = 'mean',
         show_rug : bool = True,
+        y_FUN    : callable = None,
         **predict_kwargs
     ):
         
         predict_kwargs.update({'data_grid':data_grid})
         
-        prediction = self.prediction(**predict_kwargs)
+        prediction = self.prediction(**predict_kwargs,y_FUN=y_FUN)
         plot_var   = list(predict_kwargs['data_grid'].keys())
         raw_data   = self.data if show_rug else None
+        
+        if y_FUN is not None:
+            y_label = f'FUN({self.y_col})'
+        else:
+            y_label = self.y_col
         
         if plot_type == '1d':
             plot = plot_grid_1d(
@@ -503,13 +519,13 @@ class LinearModel:
                 raw_data  = raw_data,
                 plot_var  = plot_var,
                 ci_type   = ci_type,
-                y_label   = self.y_col
+                y_label   = y_label
             )
         elif plot_type == '2d':
             plot = plot_grid_2d(
                 grid_data = prediction,
                 plot_var  = plot_var,
-                y_label   = self.y_col
+                y_label   = y_label
             )
         else:
             raise Exception('plot_type参数只能是1d或2d')
@@ -518,11 +534,12 @@ class LinearModel:
     
     def plot_all_prediction(
         self,
-        plot_x  :list            = None,
-        color_by:dict            = None,
-        free_y  :bool            = False,
-        ci_type :Union[str,list] = 'mean',
-        show_rug : bool = True,
+        plot_x   :list            = None,
+        color_by :dict            = None,
+        free_y   :bool            = False,
+        ci_type  :Union[str,list] = 'mean',
+        y_FUN    :callable        = None,
+        show_rug :bool            = True,
     ):
         plot_x   = self.x_col if plot_x is None else plot_x
         color_by = color_by if color_by is not None else {}
@@ -541,7 +558,7 @@ class LinearModel:
                 continue
             data_grid = {x:'line',**color_by}
             pred = (
-                self.prediction(data_grid=data_grid)
+                self.prediction(data_grid=data_grid,y_FUN=y_FUN)
                 .drop(set(plot_x).difference(data_grid.keys()),axis=1)
                 .rename({x:'x_value'},axis=1)
                 .assign(x_name=x)
@@ -554,12 +571,17 @@ class LinearModel:
         pred_grid = pd.concat(pred_grid,axis=0)
         raw_data  = pd.concat(raw_data,axis=0) if show_rug else None
         
+        if y_FUN is not None:
+            y_label = f'FUN({self.y_col})'
+        else:
+            y_label = self.y_col
+        
         plot = plot_all_grid_1d(
             grid_data = pred_grid,
             raw_data  = raw_data,
             free_y    = free_y,
             ci_type   = ci_type,
-            y_label   = self.y_col,
+            y_label   = y_label,
             color_x   = color_x
         )
         
