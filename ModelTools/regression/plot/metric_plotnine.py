@@ -58,7 +58,7 @@ def plot_resid(data,type='index',var:pd.DataFrame=None):
         if not isinstance(var,pd.DataFrame):
             raise Exception('WRONG')
         
-        plot_data = pd.concat([plot_data,var],axis=1)
+        plot_data = pd.concat([plot_data.reset_index(drop=True),var.reset_index(drop=True)],axis=1)
         var_col   = var.columns.to_list()
         plot = (
             plot_data
@@ -66,6 +66,7 @@ def plot_resid(data,type='index',var:pd.DataFrame=None):
             .pipe(gg.ggplot)
             + gg.aes(x='value',y='abs_std_resid')
             + gg.geom_point()
+            + gg.geom_smooth(method='lowess',color='red',se=False)
             + gg.facet_wrap(facets='var',scales='free_x')
         )
     

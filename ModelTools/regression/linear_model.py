@@ -263,24 +263,6 @@ class LinearModel:
             tabulate(metric_info,headers='keys')
         )
     
-    def check_resid_heterogeneity(self):
-        import plotnine as gg
-        plot = (
-            self.prediction(ci_method=None)
-            .assign(Resid = np.abs(self.fit_resid))
-            .rename(columns={'mean':'Fitted'})
-            .melt(
-                id_vars='Resid',
-                value_vars=self.x_col + ['Fitted']
-            )
-            .pipe(gg.ggplot)
-            + gg.aes(x='value',y='Resid')
-            + gg.geom_point(alpha=0.3)
-            + gg.facet_wrap(facets='variable',scales='free_x')
-            + gg.geom_smooth(method='lowess',color='red',se=False)
-        )
-        return plot 
-    
     def slope(
         self,
         new_data  : pd.DataFrame    = None,
