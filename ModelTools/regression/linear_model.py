@@ -10,7 +10,7 @@ from patsy import dmatrices,build_design_matrices
 from ..utils.data_grid import DataGrid
 from .._src.tabulate import tabulate
 from .metric import Metric
-from .plot.grid import plot_grid_1d,plot_all_grid_1d,plot_grid_2d
+from .plot.grid_plotnine import plot_grid_1d,plot_all_grid_1d,plot_grid_2d
 from .model_config import (
     _linear_model,
     _default_param,
