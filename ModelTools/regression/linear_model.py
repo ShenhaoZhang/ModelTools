@@ -218,17 +218,23 @@ class LinearModel:
             
         return coef
     
-    def metric(self,new_data=None) -> pd.DataFrame:
+    def metric(self,new_data:Union[pd.DataFrame,list,dict,None]=None) -> pd.DataFrame:
         
         train_y_pred = self.mod.predict(self.x) 
         metric = Metric(y_true=self.y,y_pred=train_y_pred,y_name='Train').get_metric()
         
         if isinstance(new_data,pd.DataFrame):
-            new_data = [new_data]
+            new_data = {0:new_data}
+        elif isinstance(new_data,list):
+            new_data = dict(enumerate(new_data))
+        elif isinstance(new_data,dict):
+            new_data = new_data
         else:
-            new_data = []
+            new_data = dict()
             
-        for idx,data in enumerate(new_data):
+        for idx,data in new_data.items():
+            if data.shape[0] == 0:
+                continue
             test_data   = data.loc[:,self.x_col]
             test_pred   = self._predict(new_data=test_data)
             test_true   = data.loc[:,self.y_col]
