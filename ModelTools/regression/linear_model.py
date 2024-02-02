@@ -39,8 +39,30 @@ class LinearModel:
         self.coef_dist     = None
         self.show_progress = show_progress
         self.rng_seed      = rng_seed
-        
-        
+    
+    def save(self,path):
+        model_info = {
+            'formula'  : self.formula,
+            'data'     : self.data,
+            'mod'      : self.mod,
+            'coef_dist': self.coef_dist,
+            'fit_resid': self.fit_resid
+        }
+        pd.to_pickle(model_info,path)
+    
+    @classmethod
+    def load(cls,path):
+        model_info = pd.read_pickle(path)
+        linear_model = cls(
+            formula = model_info['formula'],
+            data    = model_info['data']
+        )
+        linear_model.coef_dist = model_info['coef_dist']
+        linear_model.mod       = model_info['mod']
+        linear_model.fit_resid = model_info['fit_resid']
+        return linear_model
+    
+    
     def _init_data(self,new_data=None,data_grid=None):
         # TODO 检查datagrid的合规性
         if new_data is not None and data_grid is not None:
